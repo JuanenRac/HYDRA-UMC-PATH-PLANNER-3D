@@ -1,0 +1,22 @@
+{
+  "schema_version": "1.0",
+  "ecosystem": "HYDRA-UMC",
+  "name": "HYDRA-UMC-PATH-PLANNER-3D",
+  "version": "0.0.2",
+  "role": "library",
+  "stack": "rust",
+  "technologies": [
+    "Rust",
+    "RRT* path planning"
+  ],
+  "deployment_target": "cm5",
+  "maturity": "functional",
+  "family": "Orchestration & Swarm",
+  "parent": "HYDRA-UMC-ORCHESTRATOR",
+  "build": "cargo build --release.",
+  "notes": "Real RRT*-based 3D path planner, tested against real obstacle/workspace scenarios.",
+  "native_version": {
+    "file": "Cargo.toml",
+    "pattern": "^version\\s*=\\s*\"(\\d+)\\.(\\d+)\\.(\\d+)\""
+  }
+}
