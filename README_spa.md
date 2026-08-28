@@ -27,6 +27,7 @@ Integra datos de ocupación en tiempo real de los Nodos Vision y restricciones c
 * 🛡️ **Evitación de Colisiones Dinámica:** Re-planificación en tiempo real cuando se detectan nuevos obstáculos.
 * ⚡ **Optimizado para el Rendimiento:** Implementación C++/Rust altamente paralelizada para generación de rutas en menos de 50ms.
 * 🔄 **Nativo G-Code y URDF:** Parsea directamente comandos de movimiento industriales y modelos de robot.
+* ⏱️ **Límite de Tiempo Real y Validación de Trayectoria (v0):** `PlannerConfig.max_duration_ms` acota el tiempo de búsqueda por reloj real, independiente de `max_iterations`. Un nuevo subcomando `validate` revisa una trayectoria ya calculada (cacheada, reproducida o editada a mano) contra los obstáculos/workspace actuales antes de confiar en ella para ejecución real.
 
 ---
 
@@ -52,6 +53,8 @@ flowchart TB
 * **Por qué los obstáculos son esferas, no un octree de mallas arbitrarias.** Una esfera es el primitivo de colisión 3D más simple que sigue siendo real y geométricamente correcto - no un sustituto tipo caja delimitadora de algo más detallado. Un octree/BVH solo empieza a importar cuando una escena tiene suficientes colisionadores como para que la comprobación por fuerza bruta sea el cuello de botella - la célula del enjambre de hoy (un puñado de brazos y zonas de seguridad estáticas) no lo tiene.
 * **Por qué esto es una CLI sobre un archivo de escenario JSON hoy, no un servicio de red.** Elegir entre HTTP y el contrato gRPC compartido del ecosistema (`hydra.common.v1`, ver `HYDRA-UMC-ORCHESTRATOR/proto/`) es una decisión de protocolo real que merece su propia pasada en cuanto HYDRA-UMC-JOB-DISPATCHER esté realmente listo para llamar a este servicio - ver `mejoras_futuras.txt`. La CLI ya es genuinamente usable hoy (`run.bat scenarios/example.json`), solo que todavía no está conectada a la red.
 * **Cómo encaja en el resto del ecosistema.** Un servicio hermano bajo HYDRA-UMC-ORCHESTRATOR - planifica las rutas que realmente sigue el trabajo asignado por HYDRA-UMC-JOB-DISPATCHER, contrastadas con HYDRA-UMC-TWIN antes de que nada se mueva de verdad.
+* **Por qué `max_duration_ms` es una comprobación de reloj real y no solo un `max_iterations` más bajo.** El numero de iteraciones por si solo no puede acotar el tiempo real: una escena con obstaculos mas densos hace que las comprobaciones de colision de cada iteracion sean proporcionalmente mas lentas, asi que el mismo presupuesto de iteraciones puede tardar un tiempo real muy distinto en una escena patologica frente a una abierta. Una llamada al planificador dentro de un bucle de control en tiempo real necesita un presupuesto de tiempo real, no un sustituto.
+* **Por qué `validate` es un subcomando nuevo en vez de cambiar lo que devuelve `plan()`.** `rrt::plan()` ya solo devuelve rutas libres de colision por construccion - no hay hueco que cerrar ahi. `validate_path()`/el subcomando `validate` existe para rutas que NO vinieron de una llamada fresca a `plan()` en este proceso: una ruta cacheada/reproducida, una recibida de otro proceso, un escenario editado a mano - donde el conjunto de obstaculos puede haber cambiado desde que se calculo la ruta. El mismo patron usado en todo el ecosistema: un punto de entrada nuevo con verja añadido junto a una primitiva de bajo nivel sin tocar.
 
 ---
 
@@ -64,7 +67,8 @@ HYDRA-UMC-PATH-PLANNER-3D/
 │   ├── geometry.rs   # Vec3 - el algebra vectorial 3D minima que hace falta
 │   ├── obstacle.rs   # Obstaculos esfericos + comprobaciones de colision
 │   ├── rng.rs        # PRNG determinista sin dependencias (xorshift64*)
-│   └── rrt.rs        # El planificador real: busqueda RRT, Workspace, PlannerConfig
+│   ├── rrt.rs        # El planificador real: busqueda RRT, Workspace, PlannerConfig
+│   └── validate.rs   # Revalidacion real de seguridad de una ruta ya calculada
 ├── scenarios/        # Escenarios JSON de ejemplo (ver BUILD & RUN abajo)
 ├── build/            # Binarios compilados (salida de build.sh/build.bat)
 ├── Cargo.toml        # Manifiesto del paquete Rust (nombre, versión, deps)
@@ -107,21 +111,32 @@ Un escenario es un archivo JSON con `start`, `goal`, `obstacles` (una
 lista de esferas `{center, radius}`), un `workspace` (límites
 `min`/`max`), y opcionalmente `seed` (la búsqueda es totalmente
 determinista por semilla) y `config` (`max_iterations`, `step_size`,
-`goal_bias`, `goal_threshold`, `robot_radius` - todos opcionales, con
-valores por defecto razonables). El resultado se imprime como JSON:
+`goal_bias`, `goal_threshold`, `robot_radius`, `max_duration_ms` - todos
+opcionales, con valores por defecto razonables; `max_duration_ms` acota
+el tiempo de búsqueda por reloj real, independiente de `max_iterations`).
+El resultado se imprime como JSON:
 `{"status": "ok", "path": [...]}` o
 `{"status": "error", "reason": "..."}` (`start_inside_obstacle`,
-`goal_outside_workspace`, `no_path_found`, etc. - ver el `PlanError` de
-`src/rrt.rs` para la lista completa y honesta, incluyendo el caso en que
-directamente no existe ninguna ruta, no solo una que la búsqueda no
-encontró a tiempo).
+`goal_outside_workspace`, `no_path_found`, `time_limit_exceeded`, etc. -
+ver el `PlanError` de `src/rrt.rs` para la lista completa y honesta,
+incluyendo el caso en que directamente no existe ninguna ruta, no solo
+una que la búsqueda no encontró a tiempo).
+
+Un segundo subcomando real revalida una ruta ya calculada (un array JSON
+plano de waypoints `{x, y, z}`) contra los obstáculos/workspace actuales
+de un escenario, sin correr una búsqueda nueva:
 
 ```bash
-cargo test   # geometria + colision de obstaculos, el PRNG, y el
-             # planificador RRT en si - incluyendo un test que verifica
-             # que cada segmento de ruta devuelto esta genuinamente libre
-             # de obstaculos, y otro que verifica que un objetivo
-             # realmente inalcanzable se reporta como tal
+./run.sh validate scenarios/example.json path.json
+# {"status": "safe"}
+# o: {"status": "unsafe", "issues": [{"SegmentIntersectsObstacle": {"from_index": 0, "to_index": 1}}]}
+```
+
+```bash
+cargo test   # geometria + colision de obstaculos, el PRNG, el
+             # planificador RRT (incluyendo su limite real de tiempo por
+             # reloj) y la revalidacion de seguridad de validate.rs -
+             # 28 tests en total
 ```
 
 ---

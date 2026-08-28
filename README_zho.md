@@ -29,6 +29,7 @@
 * 🛡️ **动态避碰：** 检测到新障碍物时进行实时重新规划。
 * ⚡ **性能优化：** 高度并行化的 C++/Rust 实现，实现亚 50ms 的路径生成。
 * 🔄 **原生 G-Code 与 URDF 支持：** 直接解析工业运动指令和机器人模型。
+* ⏱️ **真实时间限制与轨迹验证（v0）：** `PlannerConfig.max_duration_ms` 按真实时钟限制搜索时间，独立于 `max_iterations`。新的 `validate` 子命令会在信任一条已计算出的路径（缓存的、重放的或手工编辑过的）用于真实执行之前，将其对照当前的障碍物/工作空间重新检查。
 
 ---
 
@@ -54,6 +55,8 @@ flowchart TB
 * **为何障碍物是球体，而非任意网格的八叉树。** 球体是最简单且仍然真实、在几何上正确的 3D 碰撞基本图形——而非用包围盒来代替更详细的形状。只有当场景中的碰撞体够多、到使得暴力检测成为瓶颈时，八叉树/BVH 才开始变得重要——今天的集群单元（少量机器臂和静态安全区）还远未达到那个规模。
 * **为何这个项目今天是在 JSON 场景文件上运行的 CLI，而非网络服务。** 在 HTTP 和生态系统共享的 gRPC 契约（`hydra.common.v1`，见 `HYDRA-UMC-ORCHESTRATOR/proto/`）之间选择，是一个真实的协议决策，值得在 HYDRA-UMC-JOB-DISPATCHER 真正准备调用该服务时再单独处理——见 `mejoras_futuras.txt`。这个 CLI 今天已经真正可用（`run.bat scenarios/example.json`），只是还未接入网络。
 * **这如何融入生态系统的其余部分。** 作为 HYDRA-UMC-ORCHESTRATOR 下的同级服务——为 HYDRA-UMC-JOB-DISPATCHER 分配的任务规划其实际遵循的路线，并在任何真实移动发生之前与 HYDRA-UMC-TWIN 进行交叉验证。
+* **为何 `max_duration_ms` 是一次真实时钟检查，而不仅仅是更低的 `max_iterations`。** 单靠迭代次数无法限制真实时间：障碍物更密集的场景会让每次迭代的碰撞检测成比例地变慢，因此同样的迭代预算在一个病态场景和一个开阔场景上耗费的真实时间可能天差地别。处于实时控制循环中的规划器调用需要一个真正的时间预算，而不是它的替代品。
+* **为何 `validate` 是一个新的子命令，而不是修改 `plan()` 的返回值。** `rrt::plan()` 已经只会返回按构造就无碰撞的路径——那里没有需要弥补的缺口。`validate_path()`/`validate` 子命令是为了处理并非来自本进程内一次全新 `plan()` 调用的路径：一条缓存/重放的路径、一条从另一个进程转发来的路径、一个手工编辑过的场景——这些情况下障碍物集合可能在路径计算完成后发生了变化。这与整个生态系统中使用的模式相同：在不变的底层原语旁边添加一个受保护的新入口点。
 
 ---
 
@@ -66,7 +69,8 @@ HYDRA-UMC-PATH-PLANNER-3D/
 │   ├── geometry.rs   # Vec3——所需的最小 3D 向量数学
 │   ├── obstacle.rs   # 球形障碍物 + 线段/点碰撞检测
 │   ├── rng.rs        # 无依赖的确定性 PRNG（xorshift64*）
-│   └── rrt.rs        # 真正的规划器：RRT 搜索、Workspace、PlannerConfig
+│   ├── rrt.rs        # 真正的规划器：RRT 搜索、Workspace、PlannerConfig
+│   └── validate.rs   # 对已计算路径的真实安全性复核
 ├── scenarios/        # 示例 JSON 场景（见下方"构建与运行"）
 ├── build/            # 编译后的二进制文件（build.sh/build.bat 的输出）
 ├── Cargo.toml        # Rust 包清单（名称、版本、依赖项）
@@ -106,18 +110,28 @@ run.bat scenarios/example.json
 场景是一个 JSON 文件，包含 `start`、`goal`、`obstacles`（一组
 `{center, radius}` 球体）、一个 `workspace`（`min`/`max` 边界），以及
 可选的 `seed`（搜索按种子完全确定）和 `config`（`max_iterations`、
-`step_size`、`goal_bias`、`goal_threshold`、`robot_radius`——均为可选，
-否则使用合理的默认值）。结果以 JSON 打印：
+`step_size`、`goal_bias`、`goal_threshold`、`robot_radius`、
+`max_duration_ms`——均为可选，否则使用合理的默认值；`max_duration_ms`
+按真实时钟限制搜索时间，独立于 `max_iterations`）。结果以 JSON 打印：
 `{"status": "ok", "path": [...]}` 或
 `{"status": "error", "reason": "..."}`（`start_inside_obstacle`、
-`goal_outside_workspace`、`no_path_found` 等——完整、诚实的列表见
-`src/rrt.rs` 的 `PlanError`，包括根本不存在任何路径的情况，而不仅仅是
-搜索未能及时找到的情况）。
+`goal_outside_workspace`、`no_path_found`、`time_limit_exceeded` 等——
+完整、诚实的列表见 `src/rrt.rs` 的 `PlanError`，包括根本不存在任何路径
+的情况，而不仅仅是搜索未能及时找到的情况）。
+
+第二个真实子命令会对照场景当前的障碍物/工作空间，重新检查一条已计算出的
+路径（一个纯粹的 `{x, y, z}` 路点 JSON 数组）的安全性，而不运行新的搜索：
 
 ```bash
-cargo test   # 几何学 + 障碍物碰撞数学、PRNG，以及 RRT 规划器本身——
-             # 包括一个验证每个返回的路径段确实没有障碍物的测试，
-             # 以及一个验证真正无法到达的目标会被如实报告的测试
+./run.sh validate scenarios/example.json path.json
+# {"status": "safe"}
+# 或：{"status": "unsafe", "issues": [{"SegmentIntersectsObstacle": {"from_index": 0, "to_index": 1}}]}
+```
+
+```bash
+cargo test   # 几何学 + 障碍物碰撞数学、PRNG、RRT 规划器本身
+             #（包括其真实的时钟时间限制），以及 validate.rs 的
+             # 安全性复核——共 28 个测试
 ```
 
 ---

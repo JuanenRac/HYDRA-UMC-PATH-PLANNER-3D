@@ -27,6 +27,7 @@ Il intègre les données d'occupation en temps réel des nœuds de vision et les
 * 🛡️ **Évitement dynamique des collisions :** Reprogrammation en temps réel lorsque de nouveaux obstacles sont détectés.
 * ⚡ **Performance optimisée :** Implémentation C++/Rust hautement parallélisée pour une génération de trajectoire en moins de 50 ms.
 * 🔄 **G-Code & URDF natifs :** Analyse directement les commandes de mouvement industrielles et les modèles de robots.
+* ⏱️ **Limite de temps réelle et validation de trajectoire (v0) :** `PlannerConfig.max_duration_ms` borne le temps de recherche par l'horloge réelle, indépendamment de `max_iterations`. Une nouvelle sous-commande `validate` revérifie une trajectoire déjà calculée (mise en cache, rejouée ou modifiée à la main) par rapport aux obstacles/à l'espace de travail actuels avant qu'elle ne soit fiable pour une exécution réelle.
 
 ---
 
@@ -52,6 +53,8 @@ flowchart TB
 * **Pourquoi les obstacles sont des sphères, pas un octree de maillages arbitraires.** Une sphère est le primitif de collision 3D le plus simple qui reste réel et géométriquement correct - pas un substitut de type boîte englobante pour quelque chose de plus détaillé. Un octree/BVH ne commence à compter que lorsqu'une scène a assez de collisionneurs pour que la vérification par force brute devienne le goulot d'étranglement - la cellule d'essaim d'aujourd'hui (une poignée de bras et de zones de sécurité statiques) n'en est pas là.
 * **Pourquoi ceci est une CLI sur un fichier de scénario JSON aujourd'hui, pas un service réseau.** Choisir entre HTTP et le contrat gRPC partagé de l'écosystème (`hydra.common.v1`, voir `HYDRA-UMC-ORCHESTRATOR/proto/`) est une vraie décision de protocole qui mérite sa propre passe une fois que HYDRA-UMC-JOB-DISPATCHER sera réellement prêt à appeler ce service - voir `mejoras_futuras.txt`. La CLI est déjà réellement utilisable aujourd'hui (`run.bat scenarios/example.json`), elle n'est simplement pas encore connectée au réseau.
 * **Comment cela s'intègre dans le reste de l'écosystème.** Un service frère sous HYDRA-UMC-ORCHESTRATOR - planifie les trajectoires que les tâches assignées par HYDRA-UMC-JOB-DISPATCHER suivent réellement, contre-vérifiées avec HYDRA-UMC-TWIN avant que quoi que ce soit ne bouge pour de vrai.
+* **Pourquoi `max_duration_ms` est une vérification de l'horloge réelle, pas juste un `max_iterations` plus bas.** Le nombre d'itérations seul ne peut pas borner le temps réel : une scène avec des obstacles plus denses rend les vérifications de collision de chaque itération proportionnellement plus lentes, donc le même budget d'itérations peut prendre un temps réel très différent sur une scène pathologique par rapport à une scène ouverte. Un appel au planificateur dans une boucle de contrôle temps réel a besoin d'un vrai budget de temps, pas d'un substitut.
+* **Pourquoi `validate` est une nouvelle sous-commande plutôt qu'un changement de ce que renvoie `plan()`.** `rrt::plan()` ne renvoie déjà que des trajectoires construites sans collision - il n'y a rien à corriger là. `validate_path()`/la sous-commande `validate` existe pour des trajectoires qui NE proviennent PAS d'un appel `plan()` frais dans ce processus : une trajectoire mise en cache/rejouée, une relayée par un autre processus, un scénario modifié à la main - où l'ensemble d'obstacles a pu changer depuis le calcul de la trajectoire. Le même motif utilisé dans tout l'écosystème : un nouveau point d'entrée protégé ajouté à côté d'une primitive de bas niveau inchangée.
 
 ---
 
@@ -64,7 +67,8 @@ HYDRA-UMC-PATH-PLANNER-3D/
 │   ├── geometry.rs   # Vec3 - l'algèbre vectorielle 3D minimale nécessaire
 │   ├── obstacle.rs   # Obstacles sphériques + vérifications de collision
 │   ├── rng.rs        # PRNG déterministe sans dépendance (xorshift64*)
-│   └── rrt.rs        # Le véritable planificateur : recherche RRT, Workspace, PlannerConfig
+│   ├── rrt.rs        # Le véritable planificateur : recherche RRT, Workspace, PlannerConfig
+│   └── validate.rs   # Revérification réelle de sécurité d'une trajectoire déjà calculée
 ├── scenarios/        # Scénarios JSON d'exemple (voir BUILD & RUN ci-dessous)
 ├── build/            # Binaires compilés (sortie de build.sh/build.bat)
 ├── Cargo.toml        # Manifeste du paquet Rust (nom, version, dépendances)
@@ -108,22 +112,33 @@ Un scénario est un fichier JSON avec `start`, `goal`, `obstacles` (une
 liste de sphères `{center, radius}`), un `workspace` (bornes
 `min`/`max`), et optionnellement `seed` (la recherche est entièrement
 déterministe par graine) et `config` (`max_iterations`, `step_size`,
-`goal_bias`, `goal_threshold`, `robot_radius` - tous optionnels, avec des
-valeurs par défaut raisonnables sinon). Le résultat est affiché en JSON :
+`goal_bias`, `goal_threshold`, `robot_radius`, `max_duration_ms` - tous
+optionnels, avec des valeurs par défaut raisonnables sinon ;
+`max_duration_ms` borne le temps de recherche par l'horloge réelle,
+indépendamment de `max_iterations`). Le résultat est affiché en JSON :
 `{"status": "ok", "path": [...]}` ou
 `{"status": "error", "reason": "..."}` (`start_inside_obstacle`,
-`goal_outside_workspace`, `no_path_found`, etc. - voir le `PlanError` de
-`src/rrt.rs` pour la liste complète et honnête, y compris le cas où
-aucune trajectoire n'existe du tout, pas seulement une que la recherche
-n'a pas trouvée à temps).
+`goal_outside_workspace`, `no_path_found`, `time_limit_exceeded`, etc. -
+voir le `PlanError` de `src/rrt.rs` pour la liste complète et honnête, y
+compris le cas où aucune trajectoire n'existe du tout, pas seulement une
+que la recherche n'a pas trouvée à temps).
+
+Une seconde sous-commande réelle revérifie une trajectoire déjà calculée
+(un simple tableau JSON de points `{x, y, z}`) par rapport aux
+obstacles/à l'espace de travail actuels d'un scénario, sans relancer de
+recherche :
 
 ```bash
-cargo test   # geometrie + collision d'obstacles, le PRNG, et le
-             # planificateur RRT lui-meme - y compris un test qui
-             # verifie que chaque segment de trajectoire retourne est
-             # veritablement degage des obstacles, et un autre qui
-             # verifie qu'un objectif reellement inatteignable est
-             # signale comme tel
+./run.sh validate scenarios/example.json path.json
+# {"status": "safe"}
+# ou : {"status": "unsafe", "issues": [{"SegmentIntersectsObstacle": {"from_index": 0, "to_index": 1}}]}
+```
+
+```bash
+cargo test   # geometrie + collision d'obstacles, le PRNG, le
+             # planificateur RRT (y compris sa vraie limite de temps par
+             # horloge) et la revérification de sécurité de validate.rs -
+             # 28 tests au total
 ```
 
 ---

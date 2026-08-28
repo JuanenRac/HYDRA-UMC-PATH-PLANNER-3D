@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "ecosystem": "HYDRA-UMC",
   "name": "HYDRA-UMC-PATH-PLANNER-3D",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "role": "library",
   "stack": "rust",
   "technologies": [
@@ -10,11 +10,11 @@
     "RRT* path planning"
   ],
   "deployment_target": "cm5",
-  "maturity": "functional",
+  "maturity": "established",
   "family": "Orchestration & Swarm",
   "parent": "HYDRA-UMC-ORCHESTRATOR",
   "build": "cargo build --release.",
-  "notes": "Real RRT*-based 3D path planner, tested against real obstacle/workspace scenarios.",
+  "notes": "Real RRT-based 3D path planner, tested against real obstacle/workspace scenarios (not yet RRT* - no rewiring pass). Real wall-clock planning time limit (PlannerConfig.max_duration_ms) independent of max_iterations, a reusable obstacle/workspace test corpus, and a new `validate` subcommand that re-checks an externally-supplied path for safety (workspace bounds, obstacle clearance, segment-level collisions) before it is trusted for real execution.",
   "native_version": {
     "file": "Cargo.toml",
     "pattern": "^version\\s*=\\s*\"(\\d+)\\.(\\d+)\\.(\\d+)\""

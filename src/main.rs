@@ -22,6 +22,10 @@ mod geometry;
 mod obstacle;
 mod rng;
 mod rrt;
+mod validate;
+
+#[cfg(test)]
+mod corpus;
 
 use geometry::Vec3;
 use obstacle::Obstacle;
@@ -30,6 +34,7 @@ use serde::{Deserialize, Serialize};
 use std::env;
 use std::fs;
 use std::process::ExitCode;
+use validate::{validate_path, PathSafetyIssue};
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 
@@ -62,6 +67,76 @@ fn plan_error_reason(e: PlanError) -> &'static str {
         PlanError::StartOutsideWorkspace => "start_outside_workspace",
         PlanError::GoalOutsideWorkspace => "goal_outside_workspace",
         PlanError::NoPathFound => "no_path_found",
+        PlanError::TimeLimitExceeded => "time_limit_exceeded",
+    }
+}
+
+#[derive(Serialize)]
+#[serde(tag = "status")]
+enum ValidateOutcome {
+    #[serde(rename = "safe")]
+    Safe,
+    #[serde(rename = "unsafe")]
+    Unsafe { issues: Vec<PathSafetyIssue> },
+}
+
+/// Validates an ALREADY-COMPUTED path (e.g. cached/replayed, or relayed
+/// from another process) against a scenario's CURRENT obstacles and
+/// workspace, without running a new search - a fail-safe re-check
+/// before a robot actually executes the path for real. New subcommand
+/// alongside the unchanged bare `<scenario.json>` invocation.
+fn run_validate(scenario_path: &str, path_path: &str) -> ExitCode {
+    let scenario_raw = match fs::read_to_string(scenario_path) {
+        Ok(raw) => raw,
+        Err(e) => {
+            eprintln!("[path-planner-3d] could not read {scenario_path}: {e}");
+            return ExitCode::FAILURE;
+        }
+    };
+    let scenario: Scenario = match serde_json::from_str(&scenario_raw) {
+        Ok(s) => s,
+        Err(e) => {
+            eprintln!("[path-planner-3d] could not parse {scenario_path}: {e}");
+            return ExitCode::FAILURE;
+        }
+    };
+
+    let path_raw = match fs::read_to_string(path_path) {
+        Ok(raw) => raw,
+        Err(e) => {
+            eprintln!("[path-planner-3d] could not read {path_path}: {e}");
+            return ExitCode::FAILURE;
+        }
+    };
+    let path: Vec<Vec3> = match serde_json::from_str(&path_raw) {
+        Ok(p) => p,
+        Err(e) => {
+            eprintln!("[path-planner-3d] could not parse {path_path}: {e}");
+            return ExitCode::FAILURE;
+        }
+    };
+
+    let robot_radius = scenario.config.unwrap_or_default().robot_radius;
+    let issues = validate_path(&path, &scenario.obstacles, &scenario.workspace, robot_radius);
+    let is_safe = issues.is_empty();
+    let outcome = if is_safe {
+        ValidateOutcome::Safe
+    } else {
+        ValidateOutcome::Unsafe { issues }
+    };
+
+    match serde_json::to_string_pretty(&outcome) {
+        Ok(json) => println!("{json}"),
+        Err(e) => {
+            eprintln!("[path-planner-3d] could not serialize result: {e}");
+            return ExitCode::FAILURE;
+        }
+    }
+
+    if is_safe {
+        ExitCode::SUCCESS
+    } else {
+        ExitCode::FAILURE
     }
 }
 
@@ -70,8 +145,19 @@ fn main() -> ExitCode {
     println!("Multi-robot 3D path optimizer: computes collision-free, RRT trajectories for the swarm sharing one workspace.");
 
     let args: Vec<String> = env::args().collect();
+
+    if args.get(1).map(String::as_str) == Some("validate") {
+        let (Some(scenario_path), Some(path_path)) = (args.get(2), args.get(3)) else {
+            eprintln!("Usage: hydra-umc-path-planner-3d validate <scenario.json> <path.json>");
+            eprintln!("<path.json> is a bare JSON array of {{\"x\":.., \"y\":.., \"z\":..}} waypoints.");
+            return ExitCode::FAILURE;
+        };
+        return run_validate(scenario_path, path_path);
+    }
+
     let Some(scenario_path) = args.get(1) else {
         eprintln!("Usage: hydra-umc-path-planner-3d <scenario.json>");
+        eprintln!("       hydra-umc-path-planner-3d validate <scenario.json> <path.json>");
         eprintln!("See scenarios/example.json for the expected format.");
         return ExitCode::SUCCESS; // printing identity and usage is a valid no-arg invocation, not a failure
     };

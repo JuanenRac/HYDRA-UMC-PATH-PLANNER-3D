@@ -17,6 +17,7 @@ use crate::geometry::Vec3;
 use crate::obstacle::Obstacle;
 use crate::rng::Xorshift64Star;
 use serde::{Deserialize, Serialize};
+use std::time::{Duration, Instant};
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub struct Workspace {
@@ -58,6 +59,18 @@ pub struct PlannerConfig {
     /// keeps the path clear of obstacles by more than a single
     /// dimensionless point would.
     pub robot_radius: f64,
+    /// Wall-clock budget for the search, independent of
+    /// `max_iterations`. `None` (the default) means no time limit -
+    /// existing scenarios/tests that never set this field behave
+    /// exactly as before. A real time limit matters because
+    /// `max_iterations` alone cannot bound wall-clock time: a scene
+    /// with many obstacles makes each iteration's collision checks
+    /// proportionally slower, so the same iteration count can take
+    /// wildly different real time on a pathological scene versus an
+    /// open one - and this planner may run on a real-time control loop
+    /// that cannot wait indefinitely for an answer.
+    #[serde(default)]
+    pub max_duration_ms: Option<u64>,
 }
 
 impl Default for PlannerConfig {
@@ -68,6 +81,7 @@ impl Default for PlannerConfig {
             goal_bias: 0.05,
             goal_threshold: 0.5,
             robot_radius: 0.1,
+            max_duration_ms: None,
         }
     }
 }
@@ -84,6 +98,12 @@ pub enum PlanError {
     /// iteration budget was too low for this scene - the planner cannot
     /// tell the two apart, and does not pretend to.
     NoPathFound,
+    /// The search hit `config.max_duration_ms` before either finding a
+    /// path or exhausting `max_iterations` - distinct from `NoPathFound`
+    /// so a caller on a real-time budget can tell "genuinely searched
+    /// the whole budget and found nothing" apart from "ran out of wall
+    /// clock, unknown whether a path exists".
+    TimeLimitExceeded,
 }
 
 struct TreeNode {
@@ -134,7 +154,16 @@ pub fn plan(
             .any(|o| o.intersects_segment(a, b, config.robot_radius))
     };
 
+    let deadline = config.max_duration_ms.map(Duration::from_millis);
+    let search_started = Instant::now();
+
     for _ in 0..config.max_iterations {
+        if let Some(deadline) = deadline {
+            if search_started.elapsed() >= deadline {
+                return Err(PlanError::TimeLimitExceeded);
+            }
+        }
+
         let sample = if rng.next_f64() < config.goal_bias {
             goal
         } else {
@@ -200,6 +229,7 @@ fn reconstruct_path(tree: &[TreeNode], mut idx: usize) -> Vec<Vec3> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::corpus;
 
     fn open_workspace() -> Workspace {
         Workspace {
@@ -225,6 +255,63 @@ mod tests {
         assert_eq!(path.first().copied(), Some(start));
         assert_eq!(path.last().copied(), Some(goal));
         assert!(path.len() >= 2);
+    }
+
+    #[test]
+    fn a_zero_duration_time_limit_is_hit_before_any_useful_search() {
+        let config = PlannerConfig {
+            max_iterations: 5000,
+            max_duration_ms: Some(0),
+            ..PlannerConfig::default()
+        };
+        let result = plan(
+            corpus::start(),
+            corpus::goal(),
+            &corpus::no_obstacles(),
+            corpus::open_workspace(),
+            config,
+            1,
+        );
+        assert_eq!(result, Err(PlanError::TimeLimitExceeded));
+    }
+
+    #[test]
+    fn a_generous_time_limit_does_not_interfere_with_a_normal_search() {
+        // Same scenario/seed as `same_seed_and_scenario_is_fully_deterministic`
+        // below, but with an explicit (generous) time limit set - must
+        // reach the exact same result as leaving it unset entirely.
+        let obstacles = corpus::single_blocking_obstacle();
+        let config = PlannerConfig::default();
+        let unlimited = plan(
+            corpus::start(),
+            corpus::goal(),
+            &obstacles,
+            corpus::open_workspace(),
+            config,
+            99,
+        )
+        .unwrap();
+
+        let limited_config = PlannerConfig {
+            max_duration_ms: Some(5_000),
+            ..config
+        };
+        let limited = plan(
+            corpus::start(),
+            corpus::goal(),
+            &obstacles,
+            corpus::open_workspace(),
+            limited_config,
+            99,
+        )
+        .unwrap();
+
+        assert_eq!(unlimited, limited);
+    }
+
+    #[test]
+    fn no_time_limit_by_default_matches_prior_behavior() {
+        assert_eq!(PlannerConfig::default().max_duration_ms, None);
     }
 
     #[test]
@@ -300,26 +387,34 @@ mod tests {
 
     #[test]
     fn a_workspace_spanning_wall_honestly_reports_no_path() {
-        // A single sphere at the origin, large enough that its y/z
-        // cross-section at x=0 (radius 3.0) fully covers the workspace's
-        // own y/z bounds (+-2.0, worst-case corner distance from the
-        // origin is sqrt(2^2+2^2) = 2.83 < 3.0). Since start and goal
-        // sit on opposite sides of x=0 and the workspace itself forbids
-        // going around in y or z, every continuous path is mathematically
-        // forced to cross a blocked point - there is truly no path, not
-        // just one the search failed to find in time.
-        let start = Vec3::new(-5.0, 0.0, 0.0);
-        let goal = Vec3::new(5.0, 0.0, 0.0);
-        let workspace = Workspace {
-            min: Vec3::new(-8.0, -2.0, -2.0),
-            max: Vec3::new(8.0, 2.0, 2.0),
-        };
-        let obstacles = vec![Obstacle::new(Vec3::new(0.0, 0.0, 0.0), 3.0)];
+        // See corpus::workspace_spanning_wall's own doc comment for why
+        // every continuous path is mathematically forced to cross the
+        // obstacle here - there is truly no path, not just one the
+        // search failed to find in time.
+        let (workspace, obstacles) = corpus::workspace_spanning_wall();
         let config = PlannerConfig {
             max_iterations: 3000,
             ..PlannerConfig::default()
         };
-        let result = plan(start, goal, &obstacles, workspace, config, 3);
+        let result = plan(corpus::start(), corpus::goal(), &obstacles, workspace, config, 3);
+        assert_eq!(result, Err(PlanError::NoPathFound));
+    }
+
+    #[test]
+    fn a_workspace_spanning_wall_with_no_time_limit_still_honestly_reports_no_path() {
+        // A tight time limit must not turn a genuine "no path exists"
+        // into a misleading NoPathFound-that-was-really-a-timeout, or
+        // vice versa - a real search over the same scene, this time
+        // bounded by wall-clock time instead of iteration count, must
+        // still reach NoPathFound (the search space here is small
+        // enough to exhaust well within the limit).
+        let (workspace, obstacles) = corpus::workspace_spanning_wall();
+        let config = PlannerConfig {
+            max_iterations: 3000,
+            max_duration_ms: Some(5_000),
+            ..PlannerConfig::default()
+        };
+        let result = plan(corpus::start(), corpus::goal(), &obstacles, workspace, config, 3);
         assert_eq!(result, Err(PlanError::NoPathFound));
     }
 }

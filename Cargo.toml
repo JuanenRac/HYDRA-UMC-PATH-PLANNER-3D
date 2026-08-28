@@ -1,6 +1,6 @@
 [package]
 name = "hydra-umc-path-planner-3d"
-version = "0.0.2"
+version = "0.0.3"
 edition = "2021"
 description = "Centralized multi-robot 3D collision avoidance and path optimizer (RRT* / potential fields) for the HYDRA-UMC swarm."
 license = "GPL-3.0-only"

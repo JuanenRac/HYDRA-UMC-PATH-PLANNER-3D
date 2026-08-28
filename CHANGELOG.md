@@ -20,6 +20,15 @@ semantic-versioning judgment calls:
 
 ---
 
+## [0.0.3] - Real time limit, obstacle corpus, and unsafe-trajectory rejection
+
+- **`src/rrt.rs`** - `PlannerConfig` gains an opt-in `max_duration_ms: Option<u64>` (default `None`, so every existing scenario/test behaves exactly as before). `plan()` now checks wall-clock elapsed time each iteration and returns the new `PlanError::TimeLimitExceeded` if the budget runs out - `max_iterations` alone cannot bound wall-clock time, since a scene with more obstacles makes each iteration's collision checks proportionally slower, and this planner may sit in a real-time control loop that cannot wait indefinitely for an answer.
+- **`src/corpus.rs`** (new, test-only) - a reusable corpus of obstacle/workspace fixtures (`open_workspace`, `single_blocking_obstacle`, `wall_of_obstacles`, `workspace_spanning_wall`) shared by `rrt.rs`'s and `validate.rs`'s own tests, replacing several ad-hoc obstacle scenes that used to be re-derived per test function.
+- **`src/validate.rs`** (new) - real safety validation for an ALREADY-COMPUTED path: `plan()` only ever returns collision-free paths by construction, but a path from anywhere else (a cached/replayed plan, one relayed from another process, a hand-edited scenario) needs re-checking against the CURRENT obstacles/workspace before a robot actually executes it. `validate_path()` checks every waypoint against the workspace bounds and every obstacle, and every segment between consecutive waypoints (catching a straight line that clips an obstacle even when both of its endpoints are individually clear) - returns every issue found, not just the first.
+- **`src/main.rs`** - new `validate <scenario.json> <path.json>` subcommand wraps `validate_path()`, printing `{"status":"safe"}` or `{"status":"unsafe","issues":[...]}` (exit 0/1); the existing bare `<scenario.json>` invocation is unchanged. `plan_error_reason` gained the `time_limit_exceeded` case.
+- **`build.sh`** - fixed a version double-bump: the manifest-sync step ran `bump_manifest_version.py` without `--sync` *before* the native `bump_version.py` step, so `Cargo.toml` advanced twice per build while the manifest advanced once. Reordered to bump native first, then `--sync` after (matching `build.bat`'s already-correct order). Also added `cargo test` to both `build.sh` and `build.bat` - previously neither actually ran the test suite as part of a real build, despite advertising "verification" in their own banner text.
+- 10 new tests (time-limit behavior in `rrt.rs`, all of `validate.rs`) - 28 total, all passing with zero warnings. Verified live: the planner's own real output for `scenarios/example.json` validates as `"safe"`; a hand-crafted straight line through the same scenario's obstacle wall is correctly flagged `"unsafe"` with a real `SegmentIntersectsObstacle`; and a scenario with `max_duration_ms: 0` correctly reports `"time_limit_exceeded"` instead of quietly running the full iteration budget.
+
 ## [0.0.2] - Real single-agent RRT path search
 
 - **`src/geometry.rs`** - minimal `Vec3` math (add/sub/scale/dot/length/

@@ -27,6 +27,7 @@ It integrates real-time occupancy data from the Vision Nodes and kinematic const
 * 🛡️ **Dynamic Collision Avoidance:** Real-time re-planning when new obstacles are detected.
 * ⚡ **Performance Optimized:** Highly parallelized C++/Rust implementation for sub-50ms path generation.
 * 🔄 **G-Code & URDF Native:** Directly parses industrial motion commands and robot models.
+* ⏱️ **Real Time Limit & Trajectory Validation (v0):** `PlannerConfig.max_duration_ms` bounds search time by the wall clock, independent of `max_iterations`. A new `validate` subcommand re-checks an already-computed path (cached, replayed, or hand-edited) against the current obstacles/workspace before it is trusted for real execution.
 
 ---
 
@@ -52,6 +53,8 @@ flowchart TB
 * **Why obstacles are spheres, not an octree of arbitrary meshes.** A sphere is the simplest 3D collision primitive that is still real and geometrically correct - not a bounding-box stand-in for something more detailed. An octree/BVH only starts to matter once a scene has enough colliders that brute-force checking is the bottleneck; today's swarm cell (a handful of arms and static safety zones) does not.
 * **Why this is a CLI over a JSON scenario file today, not a network service.** Choosing HTTP vs. the ecosystem's shared gRPC contract (`hydra.common.v1`, see `HYDRA-UMC-ORCHESTRATOR/proto/`) is a real protocol decision that deserves its own pass once HYDRA-UMC-JOB-DISPATCHER is actually ready to call this service - see `mejoras_futuras.txt`. The CLI is still genuinely usable today (`run.bat scenarios/example.json`), it just isn't wired into the network yet.
 * **How this fits the rest of the ecosystem.** A sibling service under HYDRA-UMC-ORCHESTRATOR - plans the routes HYDRA-UMC-JOB-DISPATCHER's assigned jobs actually follow, cross-checked against HYDRA-UMC-TWIN before anything moves for real.
+* **Why `max_duration_ms` is a wall-clock check, not just a lower `max_iterations`.** Iteration count alone cannot bound real time: a scene with more/denser obstacles makes each iteration's collision checks proportionally slower, so the same iteration budget can take wildly different real time on a pathological scene versus an open one. A planner call sitting in a real-time control loop needs an actual time budget, not a proxy for one.
+* **Why `validate` is a new subcommand instead of changing what `plan()` returns.** `rrt::plan()` already only ever returns paths it built collision-free by construction - there's no gap to close there. `validate_path()`/the `validate` subcommand exists for paths that did NOT come from a fresh `plan()` call in this process: a cached/replayed path, one relayed from another process, a hand-edited scenario - where the obstacle set may have changed since the path was computed. Same pattern used across the ecosystem: a new, safety-gated entry point added alongside an unchanged low-level primitive.
 
 ---
 
@@ -64,7 +67,8 @@ HYDRA-UMC-PATH-PLANNER-3D/
 │   ├── geometry.rs   # Vec3 - the minimal 3D vector math the rest needs
 │   ├── obstacle.rs   # Sphere obstacles + segment/point collision checks
 │   ├── rng.rs        # Deterministic dependency-free PRNG (xorshift64*)
-│   └── rrt.rs        # The real planner: RRT search, Workspace, PlannerConfig
+│   ├── rrt.rs        # The real planner: RRT search, Workspace, PlannerConfig
+│   └── validate.rs   # Real safety re-check of an already-computed path
 ├── scenarios/        # Example JSON scenarios (see BUILD & RUN below)
 ├── build/            # Compiled binaries (build.sh/build.bat output)
 ├── Cargo.toml        # Rust package manifest (name, version, deps)
@@ -106,18 +110,30 @@ A scenario is a JSON file with `start`, `goal`, `obstacles` (a list of
 `{center, radius}` spheres), a `workspace` (`min`/`max` bounds), and an
 optional `seed` (the search is fully deterministic per seed) and `config`
 (`max_iterations`, `step_size`, `goal_bias`, `goal_threshold`,
-`robot_radius` - all optional, sane defaults otherwise). The result is
-printed as JSON: `{"status": "ok", "path": [...]}` or
+`robot_radius`, `max_duration_ms` - all optional, sane defaults otherwise;
+`max_duration_ms` bounds search time by the wall clock, independent of
+`max_iterations`). The result is printed as JSON:
+`{"status": "ok", "path": [...]}` or
 `{"status": "error", "reason": "..."}` (`start_inside_obstacle`,
-`goal_outside_workspace`, `no_path_found`, etc. - see `src/rrt.rs`'s
-`PlanError` for the full, honest list, including the case where no path
-exists at all, not just one the search failed to find in time).
+`goal_outside_workspace`, `no_path_found`, `time_limit_exceeded`, etc. -
+see `src/rrt.rs`'s `PlanError` for the full, honest list, including the
+case where no path exists at all, not just one the search failed to find
+in time).
+
+A second real subcommand re-checks an already-computed path (a bare JSON
+array of `{x, y, z}` waypoints) for safety against a scenario's current
+obstacles/workspace, without running a new search:
 
 ```bash
-cargo test   # geometry + obstacle collision math, the PRNG, and the RRT
-             # planner itself - including a test that verifies every
-             # returned path segment is genuinely obstacle-clear, and one
-             # that verifies a truly unreachable goal is reported as such
+./run.sh validate scenarios/example.json path.json
+# {"status": "safe"}
+# or: {"status": "unsafe", "issues": [{"SegmentIntersectsObstacle": {"from_index": 0, "to_index": 1}}]}
+```
+
+```bash
+cargo test   # geometry + obstacle collision math, the PRNG, the RRT
+             # planner (including its real wall-clock time limit), and
+             # validate.rs's own safety re-check - 28 tests total
 ```
 
 ---

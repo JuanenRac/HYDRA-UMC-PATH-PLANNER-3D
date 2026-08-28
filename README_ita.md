@@ -27,6 +27,7 @@ Integra i dati di occupazione in tempo reale dai Vision Node e i vincoli cinemat
 * 🛡️ **Evitamento dinamico delle collisioni:** Rianificazione in tempo reale quando vengono rilevati nuovi ostacoli.
 * ⚡ **Prestazioni ottimizzate:** Implementazione C++/Rust altamente parallelizzata per la generazione di percorsi in meno di 50 ms.
 * 🔄 **G-Code e URDF nativi:** Analizza direttamente i comandi di movimento industriali e i modelli di robot.
+* ⏱️ **Limite di Tempo Reale e Validazione della Traiettoria (v0):** `PlannerConfig.max_duration_ms` limita il tempo di ricerca in base all'orologio reale, indipendentemente da `max_iterations`. Un nuovo sottocomando `validate` riverifica una traiettoria già calcolata (in cache, riprodotta o modificata a mano) rispetto agli ostacoli/workspace attuali prima che venga considerata affidabile per l'esecuzione reale.
 
 ---
 
@@ -52,6 +53,8 @@ flowchart TB
 * **Perché gli ostacoli sono sfere, non un octree di mesh arbitrarie.** Una sfera è il primitivo di collisione 3D più semplice che resta reale e geometricamente corretto - non un sostituto tipo bounding-box di qualcosa di più dettagliato. Un octree/BVH inizia a contare solo quando una scena ha abbastanza collisori da rendere il controllo a forza bruta il collo di bottiglia - la cella dello sciame di oggi (una manciata di bracci e zone di sicurezza statiche) non ce li ha.
 * **Perché questa è una CLI su un file di scenario JSON oggi, non un servizio di rete.** Scegliere tra HTTP e il contratto gRPC condiviso dell'ecosistema (`hydra.common.v1`, vedi `HYDRA-UMC-ORCHESTRATOR/proto/`) è una vera decisione di protocollo che merita un proprio passaggio quando HYDRA-UMC-JOB-DISPATCHER sarà realmente pronto a chiamare questo servizio - vedi `mejoras_futuras.txt`. La CLI è già genuinamente utilizzabile oggi (`run.bat scenarios/example.json`), semplicemente non è ancora collegata alla rete.
 * **Come si inserisce nel resto dell'ecosistema.** Un servizio fratello sotto HYDRA-UMC-ORCHESTRATOR - pianifica i percorsi che i lavori assegnati da HYDRA-UMC-JOB-DISPATCHER seguono realmente, verificati incrociando con HYDRA-UMC-TWIN prima che qualcosa si muova per davvero.
+* **Perché `max_duration_ms` è un controllo sull'orologio reale, non solo un `max_iterations` più basso.** Il solo numero di iterazioni non può limitare il tempo reale: una scena con ostacoli più densi rende i controlli di collisione di ogni iterazione proporzionalmente più lenti, quindi lo stesso budget di iterazioni può richiedere un tempo reale molto diverso su una scena patologica rispetto a una aperta. Una chiamata al pianificatore all'interno di un ciclo di controllo in tempo reale ha bisogno di un vero budget di tempo, non di un suo sostituto.
+* **Perché `validate` è un nuovo sottocomando invece di cambiare ciò che restituisce `plan()`.** `rrt::plan()` restituisce già solo percorsi costruiti privi di collisioni - non c'è nessun divario da colmare li'. `validate_path()`/il sottocomando `validate` esiste per percorsi che NON provengono da una chiamata `plan()` fresca in questo processo: un percorso in cache/riprodotto, uno inoltrato da un altro processo, uno scenario modificato a mano - dove l'insieme di ostacoli potrebbe essere cambiato da quando il percorso è stato calcolato. Lo stesso schema usato in tutto l'ecosistema: un nuovo punto di ingresso con verifica aggiunto accanto a una primitiva di basso livello invariata.
 
 ---
 
@@ -64,7 +67,8 @@ HYDRA-UMC-PATH-PLANNER-3D/
 │   ├── geometry.rs   # Vec3 - l'algebra vettoriale 3D minima necessaria
 │   ├── obstacle.rs   # Ostacoli sferici + controlli di collisione
 │   ├── rng.rs        # PRNG deterministico senza dipendenze (xorshift64*)
-│   └── rrt.rs        # Il vero pianificatore: ricerca RRT, Workspace, PlannerConfig
+│   ├── rrt.rs        # Il vero pianificatore: ricerca RRT, Workspace, PlannerConfig
+│   └── validate.rs   # Riverifica reale di sicurezza di un percorso già calcolato
 ├── scenarios/        # Scenari JSON di esempio (vedi BUILD & RUN sotto)
 ├── build/            # Binari compilati (output di build.sh/build.bat)
 ├── Cargo.toml        # Manifesto del pacchetto Rust (nome, versione, dep)
@@ -107,20 +111,32 @@ Uno scenario è un file JSON con `start`, `goal`, `obstacles` (una lista
 di sfere `{center, radius}`), un `workspace` (limiti `min`/`max`), e
 opzionalmente `seed` (la ricerca è totalmente deterministica per seme) e
 `config` (`max_iterations`, `step_size`, `goal_bias`, `goal_threshold`,
-`robot_radius` - tutti opzionali, con valori predefiniti ragionevoli). Il
+`robot_radius`, `max_duration_ms` - tutti opzionali, con valori
+predefiniti ragionevoli; `max_duration_ms` limita il tempo di ricerca
+in base all'orologio reale, indipendentemente da `max_iterations`). Il
 risultato viene stampato come JSON: `{"status": "ok", "path": [...]}`
 oppure `{"status": "error", "reason": "..."}` (`start_inside_obstacle`,
-`goal_outside_workspace`, `no_path_found`, ecc. - vedi il `PlanError` di
-`src/rrt.rs` per l'elenco completo e onesto, incluso il caso in cui
-semplicemente non esiste alcun percorso, non solo uno che la ricerca non
-ha trovato in tempo).
+`goal_outside_workspace`, `no_path_found`, `time_limit_exceeded`, ecc. -
+vedi il `PlanError` di `src/rrt.rs` per l'elenco completo e onesto,
+incluso il caso in cui semplicemente non esiste alcun percorso, non solo
+uno che la ricerca non ha trovato in tempo).
+
+Un secondo sottocomando reale riverifica un percorso già calcolato (un
+semplice array JSON di waypoint `{x, y, z}`) rispetto agli
+ostacoli/workspace attuali di uno scenario, senza eseguire una nuova
+ricerca:
 
 ```bash
-cargo test   # geometria + collisione ostacoli, il PRNG, e il
-             # pianificatore RRT stesso - incluso un test che verifica
-             # che ogni segmento di percorso restituito sia genuinamente
-             # libero da ostacoli, e uno che verifica che un obiettivo
-             # realmente irraggiungibile sia segnalato come tale
+./run.sh validate scenarios/example.json path.json
+# {"status": "safe"}
+# oppure: {"status": "unsafe", "issues": [{"SegmentIntersectsObstacle": {"from_index": 0, "to_index": 1}}]}
+```
+
+```bash
+cargo test   # geometria + collisione ostacoli, il PRNG, il
+             # pianificatore RRT (incluso il suo vero limite di tempo
+             # sull'orologio) e la riverifica di sicurezza di validate.rs -
+             # 28 test in totale
 ```
 
 ---

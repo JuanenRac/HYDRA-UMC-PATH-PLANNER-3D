@@ -32,6 +32,7 @@
 * 🛡️ **動的衝突回避：** 新しい障害物が検知された際のリアルタイム再計画。
 * ⚡ **パフォーマンス最適化：** 高度に並列化された C++/Rust 実装により、サブ 50ms でのパス生成。
 * 🔄 **G-Code と URDF のネイティブ対応：** 産業用モーションコマンドとロボットモデルを直接解析。
+* ⏱️ **実際の時間制限と経路検証（v0）：** `PlannerConfig.max_duration_ms` は `max_iterations` とは独立に、実時間の壁時計で探索時間を制限します。新しい `validate` サブコマンドは、既に計算済みの経路（キャッシュされた、再生された、あるいは手で編集されたもの）を、実際の実行で信頼される前に現在の障害物/ワークスペースに対して再チェックします。
 
 ---
 
@@ -57,6 +58,8 @@ flowchart TB
 * **障害物が任意のメッシュのオクツリーではなく球体である理由。** 球体は、本当で幾何学的に正しい最も単純な 3D 衝突プリミティブです——より詳細な何かの代わりのバウンディングボックスではありません。オクツリー/BVH が重要になるのは、シーン内の衝突体が十分に多くなり、総総當たり的なチェックがボトルネックになった時だけです——今日のスワームセル（一採りのアームと静的な安全ゾーン）はそこまでには至っていません。
 * **これが今日はネットワークサービスではなく JSON シナリオファイル上の CLI である理由。** HTTP とエコシステム共通の gRPC 契約（`hydra.common.v1`、`HYDRA-UMC-ORCHESTRATOR/proto/` 参照）のどちらを選ぶかは、HYDRA-UMC-JOB-DISPATCHER が実際にこのサービスを呼び出す準備ができた時点で独自の検討に値する本当のプロトコル決定です——`mejoras_futuras.txt` を参照してください。CLI は今日すでに本当に使えます（`run.bat scenarios/example.json`）。単にまだネットワークに接続されていないだけです。
 * **エコシステムの他の部分との関係。** HYDRA-UMC-ORCHESTRATOR の下の兄弟サービスです——HYDRA-UMC-JOB-DISPATCHER が割り当てたジョブが実際に従うルートを計画し、実際に何かが動く前に HYDRA-UMC-TWIN と照合されます。
+* **`max_duration_ms` が単に低い `max_iterations` ではなく実時間の壁時計チェックである理由。** イテレーション数だけでは実時間を制限できません——障害物がより密集したシーンでは各イテレーションの衝突判定が比例して遅くなるため、同じイテレーション予算でも病的なシーンと開けたシーンでは実時間が大きく異なる可能性があります。リアルタイム制御ループの中にあるプランナー呼び出しには、その代替物ではなく本物の時間予算が必要です。
+* **`validate` が `plan()` の戻り値を変更するのではなく新しいサブコマンドである理由。** `rrt::plan()` はすでに構造上衝突のない経路のみを返します——そこに埋めるべき隙間はありません。`validate_path()`/`validate` サブコマンドは、このプロセス内での新しい `plan()` 呼び出しに由来しない経路——キャッシュされた/再生された経路、別プロセスから中継された経路、手で編集されたシナリオ——のために存在します。これらの場合、経路が計算されて以降に障害物の集合が変わっている可能性があります。エコシステム全体で使われているのと同じパターンです：変更されない低レベルのプリミティブの隣に安全策付きの新しいエントリポイントを追加する。
 
 ---
 
@@ -69,7 +72,8 @@ HYDRA-UMC-PATH-PLANNER-3D/
 │   ├── geometry.rs   # Vec3 - 必要最小限の 3D ベクトル演算
 │   ├── obstacle.rs   # 球形障害物 + 衝突判定
 │   ├── rng.rs        # 依存関係のない決定論的 PRNG(xorshift64*)
-│   └── rrt.rs        # 実際のプランナー：RRT 探索、Workspace、PlannerConfig
+│   ├── rrt.rs        # 実際のプランナー：RRT 探索、Workspace、PlannerConfig
+│   └── validate.rs   # 既に計算済みの経路に対する実際の安全性再チェック
 ├── scenarios/        # サンプル JSON シナリオ(下記「ビルドと実行」参照)
 ├── build/            # コンパイル済みバイナリ（build.sh/build.bat の出力）
 ├── Cargo.toml        # Rust パッケージマニフェスト（名前、バージョン、依存関係）
@@ -113,19 +117,31 @@ run.bat scenarios/example.json
 リスト)、`workspace`(`min`/`max` の境界)を持つ JSON ファイルで、
 オプションで `seed`(探索はシード値ごとに完全に決定論的)と
 `config`(`max_iterations`、`step_size`、`goal_bias`、
-`goal_threshold`、`robot_radius` - すべて省略可能で、省略時は
-妥当なデフォルト値が使われます)を指定できます。結果は JSON として
-出力されます：`{"status": "ok", "path": [...]}` または
+`goal_threshold`、`robot_radius`、`max_duration_ms` - すべて省略可能で、
+省略時は妥当なデフォルト値が使われます。`max_duration_ms` は
+`max_iterations` とは独立に、実時間の壁時計で探索時間を制限します)を
+指定できます。結果は JSON として出力されます：
+`{"status": "ok", "path": [...]}` または
 `{"status": "error", "reason": "..."}`(`start_inside_obstacle`、
-`goal_outside_workspace`、`no_path_found` など - 完全で正直な一覧は
-`src/rrt.rs` の `PlanError` を参照。探索が時間内に見つけられなかった
-だけでなく、そもそも経路が存在しないケースも含まれます)。
+`goal_outside_workspace`、`no_path_found`、`time_limit_exceeded` など -
+完全で正直な一覧は `src/rrt.rs` の `PlanError` を参照。探索が時間内に
+見つけられなかっただけでなく、そもそも経路が存在しないケースも
+含まれます)。
+
+2つ目の実際のサブコマンドは、既に計算済みの経路(`{x, y, z}` の
+単純な JSON 配列)を、新しい探索を実行せずに、シナリオの現在の
+障害物/ワークスペースに対して再チェックします：
 
 ```bash
-cargo test   # 幾何学 + 障害物の衝突判定、PRNG、そして RRT プランナー
-             # 自体 - 返されたすべての経路セグメントが本当に障害物を
-             # 回避していることを検証するテストと、本当に到達不可能な
-             # ゴールがそのように報告されることを検証するテストを含む
+./run.sh validate scenarios/example.json path.json
+# {"status": "safe"}
+# または: {"status": "unsafe", "issues": [{"SegmentIntersectsObstacle": {"from_index": 0, "to_index": 1}}]}
+```
+
+```bash
+cargo test   # 幾何学 + 障害物の衝突判定、PRNG、RRT プランナー自体
+             #(その実際の壁時計時間制限を含む)、そして validate.rs の
+             # 安全性再チェック - 合計 28 個のテスト
 ```
 
 ---

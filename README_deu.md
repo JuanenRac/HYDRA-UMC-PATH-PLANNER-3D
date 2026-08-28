@@ -27,6 +27,7 @@ Es integriert Echtzeit-Belegungsdaten von den Vision-Knoten und kinematische Ein
 * 🛡️ **Dynamische Kollisionsvermeidung:** Echtzeit-Umplanung, wenn neue Hindernisse erkannt werden.
 * ⚡ **Leistungsoptimiert:** Hochgradig parallelisierte C++/Rust-Implementierung für eine Pfadgenerierung in weniger als 50 ms.
 * 🔄 **G-Code & URDF Nativ:** Parst direkt industrielle Bewegungsbefehle und Robotermodelle.
+* ⏱️ **Echtes Zeitlimit & Trajektorienvalidierung (v0):** `PlannerConfig.max_duration_ms` begrenzt die Suchzeit nach der realen Uhr, unabhängig von `max_iterations`. Ein neuer `validate`-Unterbefehl prüft einen bereits berechneten Pfad (zwischengespeichert, wiedergegeben oder von Hand bearbeitet) erneut gegen die aktuellen Hindernisse/den Arbeitsbereich, bevor ihm für eine echte Ausführung vertraut wird.
 
 ---
 
@@ -52,6 +53,8 @@ flowchart TB
 * **Warum Hindernisse Kugeln sind, kein Octree beliebiger Meshes.** Eine Kugel ist das einfachste 3D-Kollisionsprimitiv, das trotzdem real und geometrisch korrekt ist - kein Bounding-Box-Ersatz für etwas Detaillierteres. Ein Octree/BVH wird erst relevant, wenn eine Szene genug Kollidierer hat, damit die Brute-Force-Prüfung zum Flaschenhals wird - die heutige Schwarmzelle (eine Handvoll Arme und statische Sicherheitszonen) hat das nicht.
 * **Warum dies heute eine CLI über eine JSON-Szenariodatei ist, kein Netzwerkdienst.** Die Wahl zwischen HTTP und dem geteilten gRPC-Vertrag des Ökosystems (`hydra.common.v1`, siehe `HYDRA-UMC-ORCHESTRATOR/proto/`) ist eine echte Protokollentscheidung, die einen eigenen Durchgang verdient, sobald HYDRA-UMC-JOB-DISPATCHER wirklich bereit ist, diesen Dienst aufzurufen - siehe `mejoras_futuras.txt`. Die CLI ist schon heute wirklich benutzbar (`run.bat scenarios/example.json`), sie ist nur noch nicht ans Netzwerk angeschlossen.
 * **Wie sich das ins restliche Ökosystem einfügt.** Ein Geschwisterdienst unter HYDRA-UMC-ORCHESTRATOR - plant die Routen, denen die von HYDRA-UMC-JOB-DISPATCHER zugewiesenen Aufträge tatsächlich folgen, gegengeprüft mit HYDRA-UMC-TWIN, bevor sich real irgendetwas bewegt.
+* **Warum `max_duration_ms` eine Prüfung der realen Uhr ist, nicht nur ein niedrigeres `max_iterations`.** Die Iterationsanzahl allein kann die reale Zeit nicht begrenzen: Eine Szene mit dichteren Hindernissen macht die Kollisionsprüfungen jeder Iteration proportional langsamer, sodass dasselbe Iterationsbudget auf einer pathologischen Szene eine völlig andere reale Zeit benötigen kann als auf einer offenen. Ein Planeraufruf in einer Echtzeit-Regelschleife braucht ein echtes Zeitbudget, kein Ersatz dafür.
+* **Warum `validate` ein neuer Unterbefehl ist, statt zu ändern, was `plan()` zurückgibt.** `rrt::plan()` gibt bereits nur Pfade zurück, die konstruktionsbedingt kollisionsfrei sind - dort gibt es keine Lücke zu schließen. `validate_path()`/der `validate`-Unterbefehl existiert für Pfade, die NICHT aus einem frischen `plan()`-Aufruf in diesem Prozess stammen: ein zwischengespeicherter/wiedergegebener Pfad, einer, der von einem anderen Prozess weitergeleitet wurde, ein von Hand bearbeitetes Szenario - bei denen sich die Hindernismenge seit der Berechnung des Pfades geändert haben könnte. Dasselbe Muster, das im gesamten Ökosystem verwendet wird: ein neuer, abgesicherter Einstiegspunkt neben einer unveränderten Low-Level-Primitive.
 
 ---
 
@@ -64,7 +67,8 @@ HYDRA-UMC-PATH-PLANNER-3D/
 │   ├── geometry.rs   # Vec3 - die minimale 3D-Vektormathematik, die es braucht
 │   ├── obstacle.rs   # Kugelhindernisse + Kollisionsprüfungen
 │   ├── rng.rs        # Deterministischer, abhängigkeitsfreier PRNG (xorshift64*)
-│   └── rrt.rs        # Der echte Planer: RRT-Suche, Workspace, PlannerConfig
+│   ├── rrt.rs        # Der echte Planer: RRT-Suche, Workspace, PlannerConfig
+│   └── validate.rs   # Echte Sicherheitsnachprüfung eines bereits berechneten Pfades
 ├── scenarios/        # Beispiel-JSON-Szenarien (siehe BUILD & RUN unten)
 ├── build/            # Kompilierte Binärdateien (Ausgabe von build.sh/.bat)
 ├── Cargo.toml        # Rust-Paketmanifest (Name, Version, Abhängigkeiten)
@@ -108,22 +112,33 @@ Ein Szenario ist eine JSON-Datei mit `start`, `goal`, `obstacles` (eine
 Liste von Kugeln `{center, radius}`), einem `workspace` (`min`/`max`-
 Grenzen) und optional `seed` (die Suche ist pro Seed vollständig
 deterministisch) und `config` (`max_iterations`, `step_size`,
-`goal_bias`, `goal_threshold`, `robot_radius` - alle optional, sonst mit
-sinnvollen Standardwerten). Das Ergebnis wird als JSON ausgegeben:
+`goal_bias`, `goal_threshold`, `robot_radius`, `max_duration_ms` - alle
+optional, sonst mit sinnvollen Standardwerten; `max_duration_ms` begrenzt
+die Suchzeit nach der realen Uhr, unabhängig von `max_iterations`). Das
+Ergebnis wird als JSON ausgegeben:
 `{"status": "ok", "path": [...]}` oder
 `{"status": "error", "reason": "..."}` (`start_inside_obstacle`,
-`goal_outside_workspace`, `no_path_found` usw. - siehe `PlanError` in
-`src/rrt.rs` für die vollständige, ehrliche Liste, einschließlich des
-Falls, dass gar keine Route existiert, nicht nur einer, die die Suche
-nicht rechtzeitig fand).
+`goal_outside_workspace`, `no_path_found`, `time_limit_exceeded` usw. -
+siehe `PlanError` in `src/rrt.rs` für die vollständige, ehrliche Liste,
+einschließlich des Falls, dass gar keine Route existiert, nicht nur
+einer, die die Suche nicht rechtzeitig fand).
+
+Ein zweiter echter Unterbefehl prüft einen bereits berechneten Pfad (ein
+einfaches JSON-Array von `{x, y, z}`-Wegpunkten) erneut gegen die
+aktuellen Hindernisse/den Arbeitsbereich eines Szenarios, ohne eine neue
+Suche auszuführen:
 
 ```bash
-cargo test   # Geometrie + Hinderniskollision, den PRNG, und den
-             # RRT-Planer selbst - einschließlich eines Tests, der
-             # verifiziert, dass jedes zurückgegebene Wegsegment
-             # tatsächlich hindernisfrei ist, und eines weiteren, der
-             # verifiziert, dass ein wirklich unerreichbares Ziel
-             # als solches gemeldet wird
+./run.sh validate scenarios/example.json path.json
+# {"status": "safe"}
+# oder: {"status": "unsafe", "issues": [{"SegmentIntersectsObstacle": {"from_index": 0, "to_index": 1}}]}
+```
+
+```bash
+cargo test   # Geometrie + Hinderniskollision, den PRNG, den RRT-Planer
+             # (einschließlich seines echten Zeitlimits nach der Uhr)
+             # und die Sicherheitsnachprüfung von validate.rs -
+             # 28 Tests insgesamt
 ```
 
 ---
