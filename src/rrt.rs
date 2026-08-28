@@ -396,7 +396,14 @@ mod tests {
             max_iterations: 3000,
             ..PlannerConfig::default()
         };
-        let result = plan(corpus::start(), corpus::goal(), &obstacles, workspace, config, 3);
+        let result = plan(
+            corpus::start(),
+            corpus::goal(),
+            &obstacles,
+            workspace,
+            config,
+            3,
+        );
         assert_eq!(result, Err(PlanError::NoPathFound));
     }
 
@@ -414,7 +421,14 @@ mod tests {
             max_duration_ms: Some(5_000),
             ..PlannerConfig::default()
         };
-        let result = plan(corpus::start(), corpus::goal(), &obstacles, workspace, config, 3);
+        let result = plan(
+            corpus::start(),
+            corpus::goal(),
+            &obstacles,
+            workspace,
+            config,
+            3,
+        );
         assert_eq!(result, Err(PlanError::NoPathFound));
     }
 }

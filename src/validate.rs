@@ -24,13 +24,22 @@ pub enum PathSafetyIssue {
     /// The path has zero waypoints - nothing to validate, and nothing a
     /// robot could execute either.
     EmptyPath,
-    WaypointOutsideWorkspace { index: usize, point: Vec3 },
-    WaypointInsideObstacle { index: usize, point: Vec3 },
+    WaypointOutsideWorkspace {
+        index: usize,
+        point: Vec3,
+    },
+    WaypointInsideObstacle {
+        index: usize,
+        point: Vec3,
+    },
     /// The straight-line segment between two consecutive waypoints
     /// comes within `robot_radius` of an obstacle, even if both
     /// waypoints themselves are individually clear - the case a
     /// per-waypoint-only check would miss entirely.
-    SegmentIntersectsObstacle { from_index: usize, to_index: usize },
+    SegmentIntersectsObstacle {
+        from_index: usize,
+        to_index: usize,
+    },
 }
 
 /// Checks every waypoint in `path` against `workspace` and every
@@ -108,11 +117,21 @@ mod tests {
             max_iterations: 20_000,
             ..Default::default()
         };
-        let path = plan(corpus::start(), corpus::goal(), &obstacles, workspace, config, 7)
-            .expect("a path must exist around the wall");
+        let path = plan(
+            corpus::start(),
+            corpus::goal(),
+            &obstacles,
+            workspace,
+            config,
+            7,
+        )
+        .expect("a path must exist around the wall");
 
         let issues = validate_path(&path, &obstacles, &workspace, config.robot_radius);
-        assert!(issues.is_empty(), "planner's own output flagged unsafe: {issues:?}");
+        assert!(
+            issues.is_empty(),
+            "planner's own output flagged unsafe: {issues:?}"
+        );
     }
 
     #[test]

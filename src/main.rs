@@ -117,7 +117,12 @@ fn run_validate(scenario_path: &str, path_path: &str) -> ExitCode {
     };
 
     let robot_radius = scenario.config.unwrap_or_default().robot_radius;
-    let issues = validate_path(&path, &scenario.obstacles, &scenario.workspace, robot_radius);
+    let issues = validate_path(
+        &path,
+        &scenario.obstacles,
+        &scenario.workspace,
+        robot_radius,
+    );
     let is_safe = issues.is_empty();
     let outcome = if is_safe {
         ValidateOutcome::Safe
@@ -149,7 +154,9 @@ fn main() -> ExitCode {
     if args.get(1).map(String::as_str) == Some("validate") {
         let (Some(scenario_path), Some(path_path)) = (args.get(2), args.get(3)) else {
             eprintln!("Usage: hydra-umc-path-planner-3d validate <scenario.json> <path.json>");
-            eprintln!("<path.json> is a bare JSON array of {{\"x\":.., \"y\":.., \"z\":..}} waypoints.");
+            eprintln!(
+                "<path.json> is a bare JSON array of {{\"x\":.., \"y\":.., \"z\":..}} waypoints."
+            );
             return ExitCode::FAILURE;
         };
         return run_validate(scenario_path, path_path);
