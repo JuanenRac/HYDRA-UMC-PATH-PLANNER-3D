@@ -133,7 +133,7 @@ obstacles/workspace, without running a new search:
 ```bash
 cargo test   # geometry + obstacle collision math, the PRNG, the RRT
              # planner (including its real wall-clock time limit), and
-             # validate.rs's own safety re-check - 28 tests total
+             # validate.rs's own safety re-check - 30 tests total
 ```
 
 ---
