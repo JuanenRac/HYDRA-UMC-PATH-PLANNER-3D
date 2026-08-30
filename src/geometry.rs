@@ -44,6 +44,13 @@ impl Vec3 {
         self.sub(other).length()
     }
 
+    /// True only when every coordinate is a real, finite value. Paths can
+    /// arrive from JSON, caches or other processes, so the safety validator
+    /// must never let a NaN or infinity bypass ordinary geometric checks.
+    pub fn is_finite(self) -> bool {
+        self.x.is_finite() && self.y.is_finite() && self.z.is_finite()
+    }
+
     /// Returns the zero vector if `self` is (numerically) the zero
     /// vector, rather than producing NaN - callers that would otherwise
     /// divide by a near-zero length (e.g. two RRT samples landing on
@@ -84,5 +91,12 @@ mod tests {
         let v = Vec3::new(0.0, 0.0, 0.0);
         let n = v.normalized();
         assert_eq!(n, Vec3::new(0.0, 0.0, 0.0));
+    }
+
+    #[test]
+    fn finite_check_rejects_non_finite_coordinates() {
+        assert!(Vec3::new(0.0, -1.0, 2.5).is_finite());
+        assert!(!Vec3::new(f64::NAN, 0.0, 0.0).is_finite());
+        assert!(!Vec3::new(0.0, f64::INFINITY, 0.0).is_finite());
     }
 }

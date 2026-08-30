@@ -24,6 +24,12 @@ pub enum PathSafetyIssue {
     /// The path has zero waypoints - nothing to validate, and nothing a
     /// robot could execute either.
     EmptyPath,
+    /// A non-finite coordinate cannot represent a physical waypoint and must
+    /// be rejected explicitly instead of relying on comparison side effects.
+    NonFiniteWaypoint {
+        index: usize,
+        point: Vec3,
+    },
     WaypointOutsideWorkspace {
         index: usize,
         point: Vec3,
@@ -61,6 +67,12 @@ pub fn validate_path(
     let mut issues = Vec::new();
 
     for (index, &point) in path.iter().enumerate() {
+        if !point.is_finite() {
+            issues.push(PathSafetyIssue::NonFiniteWaypoint { index, point });
+            // Further geometry tests cannot give a meaningful safety result
+            // for NaN/infinity and might conceal the actual cause.
+            continue;
+        }
         if !workspace.contains(point) {
             issues.push(PathSafetyIssue::WaypointOutsideWorkspace { index, point });
         }
@@ -74,6 +86,9 @@ pub fn validate_path(
 
     for (from_index, window) in path.windows(2).enumerate() {
         let (a, b) = (window[0], window[1]);
+        if !a.is_finite() || !b.is_finite() {
+            continue;
+        }
         if obstacles
             .iter()
             .any(|o| o.intersects_segment(a, b, robot_radius))
@@ -152,6 +167,23 @@ mod tests {
                 point: Vec3::new(999.0, 0.0, 0.0)
             }]
         );
+    }
+
+    #[test]
+    fn non_finite_waypoint_is_rejected_without_geometry_side_effects() {
+        let path = vec![Vec3::new(0.0, 0.0, 0.0), Vec3::new(f64::NAN, 0.0, 0.0)];
+        let issues = validate_path(
+            &path,
+            &corpus::no_obstacles(),
+            &corpus::open_workspace(),
+            0.1,
+        );
+        assert_eq!(issues.len(), 1);
+        assert!(matches!(
+            issues[0],
+            PathSafetyIssue::NonFiniteWaypoint { index: 1, point }
+                if point.x.is_nan() && point.y == 0.0 && point.z == 0.0
+        ));
     }
 
     #[test]

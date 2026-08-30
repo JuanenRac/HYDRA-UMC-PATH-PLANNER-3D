@@ -20,6 +20,16 @@ semantic-versioning judgment calls:
 
 ---
 
+## Unreleased - non-finite path rejection
+
+- **`src/geometry.rs` / `src/validate.rs`** - the execution-side path gate now
+  rejects waypoints containing `NaN` or infinity explicitly and skips further
+  meaningless geometry operations for their segments. A malformed relayed or
+  cached path therefore remains unsafe rather than depending on floating-point
+  comparison side effects.
+
+---
+
 ## [0.0.3] - Real time limit, obstacle corpus, and unsafe-trajectory rejection
 
 - **`src/rrt.rs`** - `PlannerConfig` gains an opt-in `max_duration_ms: Option<u64>` (default `None`, so every existing scenario/test behaves exactly as before). `plan()` now checks wall-clock elapsed time each iteration and returns the new `PlanError::TimeLimitExceeded` if the budget runs out - `max_iterations` alone cannot bound wall-clock time, since a scene with more obstacles makes each iteration's collision checks proportionally slower, and this planner may sit in a real-time control loop that cannot wait indefinitely for an answer.
