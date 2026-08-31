@@ -86,7 +86,7 @@ substantial enough yet to warrant their own folders.
 
 ---
 
-## 🔧 BUILD & RUN
+## 🔧 BUILD & RUN GUIDE
 
 A real collision-free path search, not just a skeleton that compiles: it
 plans a route through a JSON scenario file and prints the result.
