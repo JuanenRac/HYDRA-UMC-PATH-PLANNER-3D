@@ -69,7 +69,7 @@ HYDRA-UMC-PATH-PLANNER-3D/
 │   ├── rng.rs        # PRNG deterministico senza dipendenze (xorshift64*)
 │   ├── rrt.rs        # Il vero pianificatore: ricerca RRT, Workspace, PlannerConfig
 │   └── validate.rs   # Riverifica reale di sicurezza di un percorso già calcolato
-├── scenarios/        # Scenari JSON di esempio (vedi BUILD & RUN sotto)
+├── scenarios/        # Scenari JSON di esempio (vedi BUILD ED ESECUZIONE sotto)
 ├── build/            # Binari compilati (output di build.sh/build.bat)
 ├── Cargo.toml        # Manifesto del pacchetto Rust (nome, versione, dep)
 ├── bump_version.py   # Bump di versione stile contachilometri
