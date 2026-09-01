@@ -86,7 +86,7 @@ Inhalt, der eigene Ordner bislang rechtfertigen würde.
 
 ---
 
-## 🔧 BUILD & RUN
+## 🔧 BUILD UND AUSFÜHRUNG
 
 Eine echte kollisionsfreie Pfadsuche, nicht nur ein kompilierbares
 Skelett: sie plant eine Route anhand einer JSON-Szenariodatei und gibt
@@ -143,7 +143,7 @@ cargo test   # Geometrie + Hinderniskollision, den PRNG, den RRT-Planer
 
 ---
 
-## 🚀 ROADMAP
+## 🚀 FAHRPLAN
 * **Phase 1:** Deterministische Schwarm-Synchronisation über TSN und Sub-ms-Jitter-Reduzierung.
 * **Phase 2:** 3D-Pfadplanung mit dynamischer Hindernisvermeidung in Multi-Roboter-Zellen.
 * **Phase 3:** Multi-Roboter-Job-Dispatching-Optimierung unter Berücksichtigung der Ressourcenverfügbarkeit in Echtzeit.

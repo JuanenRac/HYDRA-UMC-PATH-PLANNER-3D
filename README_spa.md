@@ -86,7 +86,7 @@ todavía suficiente para justificar sus propias carpetas.
 
 ---
 
-## 🔧 BUILD & RUN
+## 🔧 BUILD Y EJECUCIÓN
 
 Una búsqueda real de rutas libres de colisiones, no solo un esqueleto que
 compila: planifica una ruta a partir de un archivo de escenario JSON e

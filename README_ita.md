@@ -86,7 +86,7 @@ ancora sufficiente da giustificare cartelle proprie.
 
 ---
 
-## 🔧 BUILD & RUN
+## 🔧 BUILD ED ESECUZIONE
 
 Una vera ricerca di percorsi privi di collisioni, non solo uno scheletro
 che compila: pianifica un percorso a partire da un file di scenario JSON
@@ -141,7 +141,7 @@ cargo test   # geometria + collisione ostacoli, il PRNG, il
 
 ---
 
-## 🚀 ROADMAP
+## 🚀 TABELLA DI MARCIA
 * **Fase 1:** Sincronizzazione deterministica dello sciame su TSN e riduzione del jitter sub-ms.
 * **Fase 2:** Pianificazione dei percorsi 3D con evitamento dinamico degli ostacoli in celle multi-robot.
 * **Fase 3:** Ottimizzazione del dispacciamento dei lavori multi-robot utilizzando la disponibilità delle risorse in tempo reale.
