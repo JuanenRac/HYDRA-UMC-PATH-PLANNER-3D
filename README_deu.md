@@ -68,21 +68,27 @@ HYDRA-UMC-PATH-PLANNER-3D/
 │   ├── obstacle.rs   # Kugelhindernisse + Kollisionsprüfungen
 │   ├── rng.rs        # Deterministischer, abhängigkeitsfreier PRNG (xorshift64*)
 │   ├── rrt.rs        # Der echte Planer: RRT-Suche, Workspace, PlannerConfig
-│   └── validate.rs   # Echte Sicherheitsnachprüfung eines bereits berechneten Pfades
+│   ├── validate.rs   # Echte Sicherheitsnachprüfung eines bereits berechneten Pfades
+│   └── corpus.rs     # Nur für Tests: wiederverwendbare Hindernis-/Workspace-Szenario-
+│                        Fixtures, gemeinsam genutzt von den Tests von rrt.rs und validate.rs
 ├── scenarios/        # Beispiel-JSON-Szenarien (siehe BUILD UND AUSFÜHRUNG unten)
+├── docs/
+│   └── CLI_REFERENCE.md  # Referenz der Kommandozeilen-Flags
+├── images/           # Medien und Diagramme
+├── tools/
+│   └── ci_validate.py   # Manifest-/CHANGELOG-/Doku-Validierung, von der CI genutzt
 ├── build/            # Kompilierte Binärdateien (Ausgabe von build.sh/.bat)
 ├── Cargo.toml        # Rust-Paketmanifest (Name, Version, Abhängigkeiten)
 ├── bump_version.py   # Versions-Bump nach Kilometerzähler-Prinzip
+├── bump_manifest_version.py  # Synchronisiert die Version von hydra-umc.project.json mit der nativen (--sync)
 ├── build.sh/.bat     # Erhöht die Version, dann `cargo build --release`
 ├── run.sh/.bat       # Führt die kompilierte Binärdatei aus
 └── README.md
 ```
 
-Aus der ursprünglichen Vorlage entfernt: `hardware/`, `firmware/`, `os/`,
-`docs/`, `images/` und `scripts/` — dies ist ein reiner Softwaredienst
-(Rust-Binärdatei) ohne eigene Hardware oder Firmware, ohne zu pflegendes
-Betriebssystem-Image, und ohne Dokumentations-/Medien-/Utility-Skript-
-Inhalt, der eigene Ordner bislang rechtfertigen würde.
+Aus der ursprünglichen Vorlage entfernt: `hardware/`, `firmware/` und
+`os/` — dies ist ein reiner Softwaredienst (Rust-Binärdatei) ohne eigene
+Hardware oder Firmware und ohne zu pflegendes Betriebssystem-Image.
 
 ---
 

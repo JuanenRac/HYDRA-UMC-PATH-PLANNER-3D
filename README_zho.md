@@ -70,20 +70,27 @@ HYDRA-UMC-PATH-PLANNER-3D/
 │   ├── obstacle.rs   # 球形障碍物 + 线段/点碰撞检测
 │   ├── rng.rs        # 无依赖的确定性 PRNG（xorshift64*）
 │   ├── rrt.rs        # 真正的规划器：RRT 搜索、Workspace、PlannerConfig
-│   └── validate.rs   # 对已计算路径的真实安全性复核
+│   ├── validate.rs   # 对已计算路径的真实安全性复核
+│   └── corpus.rs     # 仅用于测试：rrt.rs 和 validate.rs 自身测试共享的
+│                        可复用障碍物/工作空间场景集
 ├── scenarios/        # 示例 JSON 场景（见下方"构建与运行"）
+├── docs/
+│   └── CLI_REFERENCE.md  # 命令行参数参考
+├── images/           # 媒体与图示
+├── tools/
+│   └── ci_validate.py   # CI 使用的 manifest/CHANGELOG/docs 校验
 ├── build/            # 编译后的二进制文件（build.sh/build.bat 的输出）
 ├── Cargo.toml        # Rust 包清单（名称、版本、依赖项）
 ├── bump_version.py   # 里程表式版本递增，由 build.sh/.bat 运行
+├── bump_manifest_version.py  # 将 hydra-umc.project.json 的版本与原生版本同步（--sync）
 ├── build.sh/.bat     # 递增版本号，然后执行 `cargo build --release`
 ├── run.sh/.bat       # 运行编译后的二进制文件
 └── README.md
 ```
 
-从原始模板中省略：`hardware/`、`firmware/`、`os/`、`docs/`、
-`images/` 和 `scripts/`——这是一个纯软件服务（Rust 二进制文件），
-没有专属硬件或固件，没有需要维护的操作系统镜像，目前也还没有
-足够多的文档/媒体/实用脚本内容值得为它们单独建立文件夹。
+从原始模板中省略：`hardware/`、`firmware/`、`os/`——这是一个纯软件
+服务（Rust 二进制文件），没有专属硬件或固件，也没有需要维护的操作系统
+镜像。
 
 ---
 

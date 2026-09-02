@@ -73,22 +73,27 @@ HYDRA-UMC-PATH-PLANNER-3D/
 │   ├── obstacle.rs   # 球形障害物 + 衝突判定
 │   ├── rng.rs        # 依存関係のない決定論的 PRNG(xorshift64*)
 │   ├── rrt.rs        # 実際のプランナー：RRT 探索、Workspace、PlannerConfig
-│   └── validate.rs   # 既に計算済みの経路に対する実際の安全性再チェック
+│   ├── validate.rs   # 既に計算済みの経路に対する実際の安全性再チェック
+│   └── corpus.rs     # テスト専用：rrt.rs と validate.rs 自身のテストが共有する
+│                        再利用可能な障害物/ワークスペースのシナリオ集
 ├── scenarios/        # サンプル JSON シナリオ(下記「ビルドと実行」参照)
+├── docs/
+│   └── CLI_REFERENCE.md  # コマンドラインフラグのリファレンス
+├── images/           # メディアと図版
+├── tools/
+│   └── ci_validate.py   # CI が使用する manifest/CHANGELOG/docs の検証
 ├── build/            # コンパイル済みバイナリ（build.sh/build.bat の出力）
 ├── Cargo.toml        # Rust パッケージマニフェスト（名前、バージョン、依存関係）
 ├── bump_version.py   # オドメーター式バージョンインクリメント、build.sh/.bat が実行
+├── bump_manifest_version.py  # hydra-umc.project.json のバージョンをネイティブ側と同期（--sync）
 ├── build.sh/.bat     # バージョンを増加させ、その後 `cargo build --release` を実行
 ├── run.sh/.bat       # コンパイル済みバイナリを実行
 └── README.md
 ```
 
-元のテンプレートから省略：`hardware/`、`firmware/`、`os/`、`docs/`、
-`images/`、`scripts/` —— これは純粋なソフトウェアサービス(Rust バイナリ)
-であり、専用のハードウェアやファームウェア、維持すべき
-オペレーティングシステムイメージもなく、専用フォルダを正当化する
-ほどのドキュメント/メディア/ユーティリティスクリプトの内容もまだ
-ありません。
+元のテンプレートから省略：`hardware/`、`firmware/`、`os/` —— これは
+純粋なソフトウェアサービス(Rust バイナリ)であり、専用のハードウェアや
+ファームウェア、維持すべきオペレーティングシステムイメージもありません。
 
 ---
 
