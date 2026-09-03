@@ -1,0 +1,58 @@
+HYDRA-UMC-PATH-PLANNER-3D - what's still not real, on purpose
+================================================================
+
+This file is the honest list of what this planner deliberately does NOT
+do yet, and why each item was deferred instead of half-built alongside
+the real, tested single-agent RRT search that already exists in
+src/rrt.rs. It is referenced from the README (all languages),
+CHANGELOG.md, docs/CLI_REFERENCE.md, and the module-level comments in
+src/main.rs, src/rrt.rs and src/obstacle.rs.
+
+1. RRT* (path optimality via a rewiring pass)
+   -----------------------------------------
+   src/rrt.rs implements a standard RRT: it finds *a* collision-free
+   path, not the shortest/cheapest one. RRT* adds a rewiring pass that
+   improves path quality as the tree grows. Proving a single-agent
+   planner correct (every returned path genuinely obstacle-clear, not
+   just plausible-looking) came first; optimizing the paths it returns
+   is separate, additive work on top of a search that is already known
+   to be correct.
+
+2. True multi-robot synchronized planning
+   ---------------------------------------
+   Today the planner plans one agent, one call, against a static
+   obstacle set - it does not coordinate several robots' paths against
+   each other in the same planning pass. This is real, scoped-out
+   future work, not the "up to 32+ robots simultaneously" the README
+   describes as the eventual goal. Building single-agent correctness,
+   multi-robot coordination, and RRT* all at once would have meant
+   debugging all three together instead of proving each independently.
+
+3. Octree/BVH-accelerated collision checks at scale
+   --------------------------------------------------
+   src/obstacle.rs checks obstacles (spheres) with brute-force,
+   per-obstacle math - the simplest 3D collision primitive that is
+   still real and correct. That's fine at today's scale: a handful of
+   arms and static safety zones sharing a cell, not thousands of
+   colliders. An octree/BVH is real future work once a scene exists
+   with enough obstacles for brute-force checking to actually matter.
+
+4. KD-tree nearest-neighbor lookup
+   --------------------------------
+   src/rrt.rs finds each new tree node's nearest neighbor with a linear
+   scan over the tree, not a KD-tree. Fine at the tree sizes a single
+   planning call produces today (hundreds to a few thousand nodes), and
+   simpler to verify correct than a KD-tree would have been for this
+   first pass. Worth revisiting once tree sizes grow enough for the
+   linear scan to dominate planning time.
+
+5. Exposing this as a network service (HTTP or hydra.common.v1 gRPC)
+   -------------------------------------------------------------------
+   This is a CLI over a JSON scenario file today, not a network
+   service. Choosing HTTP vs. the ecosystem's shared gRPC contract
+   (hydra.common.v1, see HYDRA-UMC-ORCHESTRATOR/proto/) is a real
+   protocol decision that deserves its own pass once a real caller
+   (HYDRA-UMC-JOB-DISPATCHER) is actually ready to integrate against
+   this planner. The CLI is genuinely usable today
+   (./run.sh scenarios/example.json) - it just isn't wired into the
+   network yet.
