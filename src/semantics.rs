@@ -2,7 +2,7 @@
 // Copyright (C) 2026 JuanenRac (Electro Hobby 3D) <electrohobby3d@gmail.com>
 // GPL-3.0 - see LICENSE
 //
-// PATH-01 (found in an ecosystem-wide software-improvements audit, P0):
+// PATH-01 (P0):
 // obstacle.rs's own contains_point()/intersects_segment() compute an
 // EFFECTIVE collision radius as `self.radius + clearance` - a negative
 // robot_radius large enough in magnitude (e.g. -2 against an obstacle

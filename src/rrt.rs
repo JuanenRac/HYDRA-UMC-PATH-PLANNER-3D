@@ -273,8 +273,7 @@ mod tests {
         assert!(path.len() >= 2);
     }
 
-    // PATH-01 (found in an ecosystem-wide software-improvements audit,
-    // P0): a negative robot_radius must reject the plan outright, not
+    // PATH-01 (P0): a negative robot_radius must reject the plan outright, not
     // let obstacle.rs's own effective-radius arithmetic go negative and
     // silently defeat every collision check the search relies on.
     #[test]
