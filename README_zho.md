@@ -71,6 +71,7 @@ HYDRA-UMC-PATH-PLANNER-3D/
 │   ├── rng.rs        # 无依赖的确定性 PRNG（xorshift64*）
 │   ├── rrt.rs        # 真正的规划器：RRT 搜索、Workspace、PlannerConfig
 │   ├── validate.rs   # 对已计算路径的真实安全性复核
+│   ├── semantics.rs  # 共享语义门：在任何几何检查之前拒绝无效场景
 │   └── corpus.rs     # 仅用于测试：rrt.rs 和 validate.rs 自身测试共享的
 │                        可复用障碍物/工作空间场景集
 ├── scenarios/        # 示例 JSON 场景（见下方"构建与运行"）

@@ -74,6 +74,7 @@ HYDRA-UMC-PATH-PLANNER-3D/
 │   ├── rng.rs        # 依存関係のない決定論的 PRNG(xorshift64*)
 │   ├── rrt.rs        # 実際のプランナー：RRT 探索、Workspace、PlannerConfig
 │   ├── validate.rs   # 既に計算済みの経路に対する実際の安全性再チェック
+│   ├── semantics.rs  # 共有セマンティックゲート：ジオメトリチェックの前に無効なシナリオを拒否する
 │   └── corpus.rs     # テスト専用：rrt.rs と validate.rs 自身のテストが共有する
 │                        再利用可能な障害物/ワークスペースのシナリオ集
 ├── scenarios/        # サンプル JSON シナリオ(下記「ビルドと実行」参照)
