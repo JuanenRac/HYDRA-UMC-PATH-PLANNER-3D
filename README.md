@@ -69,6 +69,7 @@ HYDRA-UMC-PATH-PLANNER-3D/
 │   ├── rng.rs        # Deterministic dependency-free PRNG (xorshift64*)
 │   ├── rrt.rs        # The real planner: RRT search, Workspace, PlannerConfig
 │   ├── validate.rs   # Real safety re-check of an already-computed path
+│   ├── semantics.rs  # Shared semantic gate: rejects an invalid scenario before any geometry check
 │   └── corpus.rs     # Test-only: reusable obstacle/workspace scenario fixtures
 │                        shared by rrt.rs's and validate.rs's own tests
 ├── scenarios/        # Example JSON scenarios (see BUILD & RUN below)

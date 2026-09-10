@@ -18,10 +18,10 @@ semantic-versioning judgment calls:
 
 ---
 
-## [0.0.4] - PATH-01/DOC-30: reject a semantically invalid scenario before any geometry check
+## [0.0.4] - Reject a semantically invalid scenario before any geometry check
 
-- **PATH-01 (found in an ecosystem-wide software-improvements audit,
-  P0):** `Obstacle::contains_point`/`intersects_segment` compute an
+- **Negative-radius scenario reported as "safe":**
+  `Obstacle::contains_point`/`intersects_segment` compute an
   effective collision radius as `obstacle.radius + robot_radius` - a
   negative `robot_radius` (e.g. `-2` against an obstacle radius of `1`)
   made that effective radius negative, which no real, non-negative
@@ -41,9 +41,8 @@ semantic-versioning judgment calls:
   for both `plan()` and `validate_path()`, plus the full semantic-gate
   matrix. `cargo fmt --check`/`clippy --all-targets -- -D warnings`/
   `test --all-targets` (40/40): all passing.
-- **DOC-30 (found in the same audit):** unlike the same finding in
-  sibling repos, `mejoras_futuras.txt` here is a real, tracked, public
-  file (not a stray reference to a private one) - but every one of its
+- **Inline deferral reasons:** `mejoras_futuras.txt` here is a real,
+  tracked, public file - but every one of its
   20 cross-references (`CHANGELOG.md`, `docs/CLI_REFERENCE.md`,
   `src/main.rs`, `src/obstacle.rs`, `src/rrt.rs`, README in all 7
   languages) required the reader to jump elsewhere for a short reason
