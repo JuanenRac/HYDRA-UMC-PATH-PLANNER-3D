@@ -10,9 +10,13 @@
 
 <p align="center">
   <img src="https://img.shields.io/badge/Licencia-GPL%203.0-blue.svg" alt="GPL 3.0">
-  <img src="https://img.shields.io/badge/Algorithm-RRT*%20%2F%20Potential%20Fields-orange.svg" alt="Algorithms">
-  <img src="https://img.shields.io/badge/Engine-C++20%20%2F%20Rust-blue.svg" alt="Engine">
+  <img src="https://img.shields.io/badge/Algorithm-RRT%20%2F%20Potential%20Fields-orange.svg" alt="Algorithms">
+  <img src="https://img.shields.io/badge/Engine-Rust-blue.svg" alt="Engine">
 </p>
+
+---
+
+**诚实核查——今天真正能跑起来的部分：** `src/rrt.rs` 中的单智能体 RRT 搜索（带有真实的、独立于 `max_iterations` 的挂钟时间截止 `max_duration_ms`）、`src/obstacle.rs` 的球体/线段碰撞数学、`src/geometry.rs` 的向量数学、`src/rng.rs` 的确定性 PRNG、`src/semantics.rs` 的场景校验关卡，以及 `src/validate.rs` 对已计算路径的安全性复检，都是真实且经过测试的（40 个测试，`cargo test`）——每一条返回的路径都在测试中被验证为真正无障碍，而不只是看起来合理。CLI（`run.sh scenarios/example.json`，加上 `validate` 子命令）今天确实可用。仍然只是设想的部分：这只是一个单线程的普通 RRT，不是 RRT*（代码中不存在任何优化重连步骤），也不是多机器人协调器——本 README 其他地方出现的"最多可同时为 32+ 台机器人"和"亚 50ms 的路径生成"描述的是未来目标，不是实测结果；本仓库中完全没有任何 C++ 代码（Cargo.toml 恰好只有两个依赖，`serde`/`serde_json`，没有任何并行/线程 crate），而且它目前是一个基于 JSON 场景文件的 CLI，还不是连接到 HYDRA-UMC-JOB-DISPATCHER 的网络服务，也没有对照一个真实运行中的 HYDRA-UMC-TWIN 做过验证。已交付的具体内容见 `CHANGELOG.md`，被刻意推迟的内容及原因的完整、诚实清单见 `mejoras_futuras.txt`。
 
 ---
 
@@ -25,11 +29,10 @@
 以确保规划的路径在物理上是可行且安全的。
 
 ### 关键特性：
-* 📐 **集群路径优化：** 可同时为最多 32+ 台机器人进行同步规划。
-* 🛡️ **动态避碰：** 检测到新障碍物时进行实时重新规划。
-* ⚡ **性能优化：** 高度并行化的 C++/Rust 实现，实现亚 50ms 的路径生成。
-* 🔄 **原生 G-Code 与 URDF 支持：** 直接解析工业运动指令和机器人模型。
-* ⏱️ **真实时间限制与轨迹验证（v0）：** `PlannerConfig.max_duration_ms` 按真实时钟限制搜索时间，独立于 `max_iterations`。新的 `validate` 子命令会在信任一条已计算出的路径（缓存的、重放的或手工编辑过的）用于真实执行之前，将其对照当前的障碍物/工作空间重新检查。
+* 📐 **单智能体 3D 路径搜索（今天真实）：** 在一个静态球体障碍场景上进行的真实、经过测试的 RRT 搜索（`src/rrt.rs`）——每一条返回的路径都在测试中被验证为真正无障碍。同时为 32+ 台机器人做同步规划是集群规模的目标，尚未实现——见下面的"架构与设计决策"。
+* 🛡️ **针对变化障碍物的路径复检（今天真实）：** `validate` 子命令（`src/validate.rs`）在不重新搜索的情况下，将一条已计算出的路径对照场景当前的障碍物/工作空间重新检查。由新检测到的障碍物自动触发的实时重新规划尚未实现——目前它是调用者显式执行的一个独立命令。
+* ⚡ **确定性、受挂钟时间约束的搜索（今天真实）：** 一个真实的单线程 Rust 实现（本仓库中完全没有 C++），带有真实的 `PlannerConfig.max_duration_ms` 截止时间，独立于 `max_iterations`。这段代码中没有任何并行性，也没有任何实测的亚 50ms 基准——那类性能说法描述的是未来目标。
+* 🔄 **JSON 场景格式（今天真实）：** 一个场景就是一个普通的 JSON 文件（`start`/`goal`/`obstacles`/`workspace`/`config`，见下面的"构建与运行"）。本仓库中没有任何 G-Code 或 URDF 解析器——那是 HYDRA-UMC-TWIN 自己的事，不是这个规划器的。
 
 ---
 

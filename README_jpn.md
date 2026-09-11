@@ -10,9 +10,13 @@
 
 <p align="center">
   <img src="https://img.shields.io/badge/Licencia-GPL%203.0-blue.svg" alt="GPL 3.0">
-  <img src="https://img.shields.io/badge/Algorithm-RRT*%20%2F%20Potential%20Fields-orange.svg" alt="Algorithms">
-  <img src="https://img.shields.io/badge/Engine-C++20%20%2F%20Rust-blue.svg" alt="Engine">
+  <img src="https://img.shields.io/badge/Algorithm-RRT%20%2F%20Potential%20Fields-orange.svg" alt="Algorithms">
+  <img src="https://img.shields.io/badge/Engine-Rust-blue.svg" alt="Engine">
 </p>
+
+---
+
+**正直な現状確認 - 実際に今動くもの:** `src/rrt.rs` の単一エージェントRRT探索（`max_iterations`とは独立した、実際の壁時計ベースの `max_duration_ms` 期限を持つ）、`src/obstacle.rs` の球体/線分の衝突計算、`src/geometry.rs` のベクトル計算、`src/rng.rs` の決定論的PRNG、`src/semantics.rs` のシナリオ検証ゲート、そして `src/validate.rs` による既に計算済みの経路の安全性再チェックは本物であり、テスト済みです（40件のテスト、`cargo test`）- 返されるすべての経路は、単に「もっともらしい」だけでなく、テストにおいて実際に障害物のないことが検証されています。CLI（`run.sh scenarios/example.json`、および `validate` サブコマンド）は今日実際に使用可能です。まだ構想段階にとどまっているもの: これは単純なシングルスレッドのRRTであり、RRT*ではありません（コード内に最適性を改善する再配線パスは存在しません）し、マルチロボット・コーディネーターでもありません - このREADMEの他の箇所にある「最大32台以上のロボットを同時に」や「サブ50msでのパス生成」という表現は、将来の目標を述べたものであり、測定された結果ではありません。このリポジトリのどこにもC++は存在せず（Cargo.tomlの依存関係は `serde`/`serde_json` の2つだけで、並列処理/スレッド用クレートはありません）、これは現時点ではJSONシナリオファイルに対するCLIであり、HYDRA-UMC-JOB-DISPATCHERに接続されたネットワークサービスでもなければ、実際に稼働しているHYDRA-UMC-TWINに対して検証されたものでもありません。これまでに実際に出荷されたものの詳細は `CHANGELOG.md` を、意図的に先送りされた事項とその理由の完全で正直な一覧は `mejoras_futuras.txt` を参照してください。
 
 ---
 
@@ -28,11 +32,10 @@
 を保証します。
 
 ### 主な機能：
-* 📐 **スウォームパス最適化：** 最大 32 台以上のロボットを同時に同期計画。
-* 🛡️ **動的衝突回避：** 新しい障害物が検知された際のリアルタイム再計画。
-* ⚡ **パフォーマンス最適化：** 高度に並列化された C++/Rust 実装により、サブ 50ms でのパス生成。
-* 🔄 **G-Code と URDF のネイティブ対応：** 産業用モーションコマンドとロボットモデルを直接解析。
-* ⏱️ **実際の時間制限と経路検証（v0）：** `PlannerConfig.max_duration_ms` は `max_iterations` とは独立に、実時間の壁時計で探索時間を制限します。新しい `validate` サブコマンドは、既に計算済みの経路（キャッシュされた、再生された、あるいは手で編集されたもの）を、実際の実行で信頼される前に現在の障害物/ワークスペースに対して再チェックします。
+* 📐 **単一エージェントによる3Dパス探索（今日実際に動く）：** 静的な球体障害物シーンに対する本物のテスト済みRRT探索（`src/rrt.rs`）- 返されるすべての経路はテストで実際に障害物のないことが検証されています。32台以上のロボットを同時に同期計画することはスウォーム規模での目標であり、まだ実装されていません - 下記のARCHITECTURE & DESIGN DECISIONSを参照してください。
+* 🛡️ **変化した障害物に対する経路の再検証（今日実際に動く）：** `validate` サブコマンド（`src/validate.rs`）は、新たな探索を行わずに、既に計算済みの経路をシナリオの現在の障害物/ワークスペースに対して再チェックします。新たに検知された障害物によって自動的にトリガーされるリアルタイム再計画はまだ実装されていません - 現時点では、呼び出し側が実行する明示的で独立したコマンドです。
+* ⚡ **決定論的で壁時計により制限された探索（今日実際に動く）：** 本物のシングルスレッドRust実装であり（このリポジトリのどこにもC++は存在しません）、`max_iterations` とは独立した本物の `PlannerConfig.max_duration_ms` 期限を持ちます。このコードには並列処理も、サブ50msの実測ベンチマークも存在しません - その種のパフォーマンスに関する主張は将来の目標を述べたものです。
+* 🔄 **JSONシナリオ形式（今日実際に動く）：** シナリオは単純なJSONファイルです（`start`/`goal`/`obstacles`/`workspace`/`config`、詳細は下記のBUILD & RUN GUIDEを参照）。このリポジトリにはG-CodeやURDFのパーサーは存在しません - それらはこのプランナーではなく、HYDRA-UMC-TWIN自身の担当領域です。
 
 ---
 

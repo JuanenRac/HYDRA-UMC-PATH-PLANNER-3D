@@ -10,9 +10,13 @@
 
 <p align="center">
   <img src="https://img.shields.io/badge/Licencia-GPL%203.0-blue.svg" alt="GPL 3.0">
-  <img src="https://img.shields.io/badge/Algorithm-RRT*%20%2F%20Potential%20Fields-orange.svg" alt="Algorithms">
-  <img src="https://img.shields.io/badge/Engine-C++20%20%2F%20Rust-blue.svg" alt="Engine">
+  <img src="https://img.shields.io/badge/Algorithm-RRT%20%2F%20Potential%20Fields-orange.svg" alt="Algorithms">
+  <img src="https://img.shields.io/badge/Engine-Rust-blue.svg" alt="Engine">
 </p>
+
+---
+
+**Honesty check - what actually runs today:** `src/rrt.rs`'s single-agent RRT search (with its real wall-clock `max_duration_ms` deadline, independent of `max_iterations`), `src/obstacle.rs`'s sphere/segment collision math, `src/geometry.rs`'s vector math, `src/rng.rs`'s deterministic PRNG, `src/semantics.rs`'s scenario validation gate, and `src/validate.rs`'s safety re-check of an already-computed path are real and tested (40 tests, `cargo test`) - every returned path is verified obstacle-clear in tests, not just plausible-looking. The CLI (`run.sh scenarios/example.json`, plus the `validate` subcommand) is genuinely usable today. What is still aspirational: this is a plain single-threaded RRT, not RRT* (no optimality-rewiring pass exists in the code) and not a multi-robot coordinator - the "up to 32+ robots simultaneously" and "sub-50ms path generation" language elsewhere in this README describe a future target, not a measured result; there is no C++ anywhere in this repository (Cargo.toml has exactly two dependencies, `serde`/`serde_json`, no threading/parallelism crate), and it is a CLI over a JSON scenario file, not yet a network service wired to HYDRA-UMC-JOB-DISPATCHER or validated against a live HYDRA-UMC-TWIN. See `CHANGELOG.md` for exactly what has shipped so far, and `mejoras_futuras.txt` for the complete, honest list of what's deliberately deferred and why.
 
 ---
 
@@ -23,11 +27,10 @@
 It integrates real-time occupancy data from the Vision Nodes and kinematic constraints from the Digital Twin to ensure that planned paths are physically feasible and safe.
 
 ### Key Features:
-* 📐 **Swarm Path Optimization:** Synchronous planning for up to 32+ robots simultaneously.
-* 🛡️ **Dynamic Collision Avoidance:** Real-time re-planning when new obstacles are detected.
-* ⚡ **Performance Optimized:** Highly parallelized C++/Rust implementation for sub-50ms path generation.
-* 🔄 **G-Code & URDF Native:** Directly parses industrial motion commands and robot models.
-* ⏱️ **Real Time Limit & Trajectory Validation (v0):** `PlannerConfig.max_duration_ms` bounds search time by the wall clock, independent of `max_iterations`. A new `validate` subcommand re-checks an already-computed path (cached, replayed, or hand-edited) against the current obstacles/workspace before it is trusted for real execution.
+* 📐 **Single-Agent 3D Path Search (real today):** a real, tested RRT search over a static sphere-obstacle scene (`src/rrt.rs`) - every returned path is verified obstacle-clear in tests. Synchronous planning for 32+ robots at once is the swarm-scale goal, not yet implemented - see ARCHITECTURE & DESIGN DECISIONS below.
+* 🛡️ **Path Re-Validation Against Changed Obstacles (real today):** the `validate` subcommand (`src/validate.rs`) re-checks an already-computed path against a scenario's current obstacles/workspace without a new search. Automatic real-time re-planning triggered by newly-detected obstacles is not implemented yet - today it is an explicit, separate command a caller runs.
+* ⚡ **Deterministic, Wall-Clock-Bounded Search (real today):** a pure single-threaded Rust implementation (no C++ anywhere in this repository) with a real `PlannerConfig.max_duration_ms` deadline, independent of `max_iterations`. There is no parallelism and no measured sub-50ms benchmark in this codebase - performance claims of that kind describe a future target.
+* 🔄 **JSON Scenario Format (real today):** a scenario is a plain JSON file (`start`/`goal`/`obstacles`/`workspace`/`config`, see BUILD & RUN below). There is no G-Code or URDF parser in this repository - those are HYDRA-UMC-TWIN's own concern, not this planner's.
 
 ---
 

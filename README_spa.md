@@ -10,9 +10,13 @@
 
 <p align="center">
   <img src="https://img.shields.io/badge/Licencia-GPL%203.0-blue.svg" alt="GPL 3.0">
-  <img src="https://img.shields.io/badge/Algoritmo-RRT*%20%2F%20Campos%20Potenciales-orange.svg" alt="Algorithms">
-  <img src="https://img.shields.io/badge/Motor-C++20%20%2F%20Rust-blue.svg" alt="Engine">
+  <img src="https://img.shields.io/badge/Algoritmo-RRT%20%2F%20Campos%20Potenciales-orange.svg" alt="Algorithms">
+  <img src="https://img.shields.io/badge/Motor-Rust-blue.svg" alt="Engine">
 </p>
+
+---
+
+**Verificación de honestidad - qué funciona de verdad hoy:** la búsqueda RRT de un solo agente en `src/rrt.rs` (con su límite real por reloj de pared `max_duration_ms`, independiente de `max_iterations`), la matemática de colisión esfera/segmento de `src/obstacle.rs`, la matemática vectorial de `src/geometry.rs`, el PRNG determinista de `src/rng.rs`, la puerta de validación de escenarios de `src/semantics.rs`, y la re-verificación de seguridad de una trayectoria ya calculada en `src/validate.rs` son reales y están probados (40 tests, `cargo test`) - cada trayectoria devuelta se verifica libre de obstáculos en los tests, no solo "parece" correcta. La CLI (`run.sh scenarios/example.json`, más el subcomando `validate`) es realmente utilizable hoy. Lo que sigue siendo aspiracional: esto es un RRT plano de un solo hilo, no RRT* (no existe ningún paso de reconexión para optimalidad en el código) ni un coordinador multi-robot - el lenguaje de "hasta 32+ robots simultáneamente" y "generación de rutas en menos de 50ms" en el resto de este README describe un objetivo futuro, no un resultado medido; no hay nada de C++ en todo este repositorio (Cargo.toml tiene exactamente dos dependencias, `serde`/`serde_json`, sin ningún crate de paralelismo/hilos), y es una CLI sobre un archivo de escenario JSON, todavía no un servicio de red conectado a HYDRA-UMC-JOB-DISPATCHER ni validado contra un HYDRA-UMC-TWIN en vivo. Ver `CHANGELOG.md` para lo que ya se ha entregado exactamente, y `mejoras_futuras.txt` para la lista completa y honesta de lo que se ha diferido deliberadamente y por qué.
 
 ---
 
@@ -23,11 +27,10 @@
 Integra datos de ocupación en tiempo real de los Nodos Vision y restricciones cinemáticas del Digital Twin para asegurar que las rutas planificadas sean físicamente viables y seguras.
 
 ### Características Clave:
-* 📐 **Optimización de Rutas de Enjambre:** Planificación síncrona para hasta 32+ robots simultáneamente.
-* 🛡️ **Evitación de Colisiones Dinámica:** Re-planificación en tiempo real cuando se detectan nuevos obstáculos.
-* ⚡ **Optimizado para el Rendimiento:** Implementación C++/Rust altamente paralelizada para generación de rutas en menos de 50ms.
-* 🔄 **Nativo G-Code y URDF:** Parsea directamente comandos de movimiento industriales y modelos de robot.
-* ⏱️ **Límite de Tiempo Real y Validación de Trayectoria (v0):** `PlannerConfig.max_duration_ms` acota el tiempo de búsqueda por reloj real, independiente de `max_iterations`. Un nuevo subcomando `validate` revisa una trayectoria ya calculada (cacheada, reproducida o editada a mano) contra los obstáculos/workspace actuales antes de confiar en ella para ejecución real.
+* 📐 **Búsqueda de Rutas 3D de un Solo Agente (real hoy):** una búsqueda RRT real y probada sobre una escena estática de obstáculos esféricos (`src/rrt.rs`) - cada trayectoria devuelta se verifica libre de obstáculos en los tests. La planificación síncrona para 32+ robots a la vez es el objetivo a escala de enjambre, todavía no implementado - ver ARQUITECTURA Y DECISIONES DE DISEÑO más abajo.
+* 🛡️ **Re-Validación de Trayectorias Contra Obstáculos Cambiados (real hoy):** el subcomando `validate` (`src/validate.rs`) revisa una trayectoria ya calculada contra los obstáculos/workspace actuales de un escenario, sin una nueva búsqueda. La re-planificación automática en tiempo real disparada por obstáculos recién detectados todavía no está implementada - hoy es un comando explícito y separado que ejecuta quien la llama.
+* ⚡ **Búsqueda Determinista y Acotada por Reloj de Pared (real hoy):** una implementación real en Rust de un solo hilo (sin nada de C++ en todo este repositorio) con un límite real `PlannerConfig.max_duration_ms`, independiente de `max_iterations`. No hay paralelismo ni ningún benchmark medido de menos de 50ms en este código - las afirmaciones de rendimiento de ese tipo describen un objetivo futuro.
+* 🔄 **Formato de Escenario JSON (real hoy):** un escenario es un archivo JSON plano (`start`/`goal`/`obstacles`/`workspace`/`config`, ver COMPILACIÓN Y EJECUCIÓN más abajo). No hay ningún parser de G-Code o URDF en este repositorio - eso es responsabilidad propia de HYDRA-UMC-TWIN, no de este planificador.
 
 ---
 
