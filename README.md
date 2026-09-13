@@ -16,7 +16,7 @@
 
 ---
 
-**Honesty check - what actually runs today:** `src/rrt.rs`'s single-agent RRT search (with its real wall-clock `max_duration_ms` deadline, independent of `max_iterations`), `src/obstacle.rs`'s sphere/segment collision math, `src/geometry.rs`'s vector math, `src/rng.rs`'s deterministic PRNG, `src/semantics.rs`'s scenario validation gate, and `src/validate.rs`'s safety re-check of an already-computed path are real and tested (40 tests, `cargo test`) - every returned path is verified obstacle-clear in tests, not just plausible-looking. The CLI (`run.sh scenarios/example.json`, plus the `validate` subcommand) is genuinely usable today. What is still aspirational: this is a plain single-threaded RRT, not RRT* (no optimality-rewiring pass exists in the code) and not a multi-robot coordinator - the "up to 32+ robots simultaneously" and "sub-50ms path generation" language elsewhere in this README describe a future target, not a measured result; there is no C++ anywhere in this repository (Cargo.toml has exactly two dependencies, `serde`/`serde_json`, no threading/parallelism crate), and it is a CLI over a JSON scenario file, not yet a network service wired to HYDRA-UMC-JOB-DISPATCHER or validated against a live HYDRA-UMC-TWIN. See `CHANGELOG.md` for exactly what has shipped so far, and `mejoras_futuras.txt` for the complete, honest list of what's deliberately deferred and why.
+**Honesty check - what actually runs today:** `src/rrt.rs`'s single-agent RRT search (with its real wall-clock `max_duration_ms` deadline, independent of `max_iterations`), `src/obstacle.rs`'s sphere/segment collision math, `src/geometry.rs`'s vector math, `src/rng.rs`'s deterministic PRNG, `src/semantics.rs`'s scenario validation gate, `src/validate.rs`'s safety re-check of an already-computed path, and `src/shrink.rs`'s real case-minimization for a failing scenario (I20 - deletes obstacles then tightens the workspace/iteration budget, re-checking the exact same failure predicate after every tentative reduction, never a scenario that merely looks smaller while testing something else) are real and tested (48 tests, `cargo test`) - every returned path is verified obstacle-clear in tests, not just plausible-looking. The CLI (`run.sh scenarios/example.json`, plus the `validate` and `shrink` subcommands) is genuinely usable today. What is still aspirational: this is a plain single-threaded RRT, not RRT* (no optimality-rewiring pass exists in the code) and not a multi-robot coordinator - the "up to 32+ robots simultaneously" and "sub-50ms path generation" language elsewhere in this README describe a future target, not a measured result; there is no C++ anywhere in this repository (Cargo.toml has exactly two dependencies, `serde`/`serde_json`, no threading/parallelism crate), and it is a CLI over a JSON scenario file, not yet a network service wired to HYDRA-UMC-JOB-DISPATCHER or validated against a live HYDRA-UMC-TWIN. See `CHANGELOG.md` for exactly what has shipped so far, and `mejoras_futuras.txt` for the complete, honest list of what's deliberately deferred and why.
 
 ---
 
@@ -143,8 +143,9 @@ obstacles/workspace, without running a new search:
 
 ```bash
 cargo test   # geometry + obstacle collision math, the PRNG, the RRT
-             # planner (including its real wall-clock time limit), and
-             # validate.rs's own safety re-check - 40 tests total
+             # planner (including its real wall-clock time limit),
+             # validate.rs's own safety re-check, and shrink.rs's real
+             # failing-scenario minimization (I20) - 48 tests total
 ```
 
 ---
