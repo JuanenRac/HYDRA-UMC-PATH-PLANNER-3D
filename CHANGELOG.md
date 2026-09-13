@@ -18,6 +18,40 @@ semantic-versioning judgment calls:
 
 ---
 
+## [0.0.5] - I20: real case-minimization for a failing scenario
+
+I20 ("Verificador independiente y reducción de casos fallidos"):
+`validate.rs` already answers "is this exact path safe against this
+exact scenario, right now" - the independent verifier the idea calls
+for. What was still missing: when the one real soundness property this
+crate's own tests check by hand for a handful of curated fixtures
+(`plan()` must never hand back a path its own independent validator
+would call unsafe) ever breaks on a larger scene, a human had no way to
+reduce that failure down to something small enough to actually debug.
+
+New `src/shrink.rs`: `planner_output_is_unsafe()` runs the real
+plan()+validate_path() pipeline and reports the real issues found, never
+conflating a genuine "unsafe path" with the honestly different "no path
+found" outcome. `shrink_scenario()` reduces a failing scenario to the
+smallest one that still reproduces the *exact same* failure - deleting
+obstacles one at a time to a fixed point, then binary-searching the
+workspace bounds toward the start/goal bounding box, then binary-
+searching `max_iterations` down - re-checking the real failure predicate
+after every tentative change, so a "shrunk" result can never silently
+stop reproducing (the idea's own explicit warning: never relax
+obstacles just to make the test pass). New `shrink <scenario.json>
+[--out <minimal.json>]` CLI subcommand reports `no_failure` honestly
+when there is nothing to reduce, or the minimized scenario plus its real
+issues, in the same JSON shape the plain CLI invocation already accepts.
+
+Deliberately scoped to deletion + bound-tightening, not obstacle
+repositioning - stated honestly as real, separate future work in
+`shrink.rs`'s own module doc.
+
+8 new tests, 48 total. `cargo fmt`/`cargo clippy --all-targets -D
+warnings`/`cargo test --all-targets` all clean. `docs/CLI_REFERENCE.md` +
+README x7 synced.
+
 ## [0.0.4] - Reject a semantically invalid scenario before any geometry check
 
 - **Negative-radius scenario reported as "safe":**

@@ -23,6 +23,7 @@ mod obstacle;
 mod rng;
 mod rrt;
 mod semantics;
+mod shrink;
 mod validate;
 
 #[cfg(test)]
@@ -32,6 +33,7 @@ use geometry::Vec3;
 use obstacle::Obstacle;
 use rrt::{plan, PlanError, PlannerConfig, Workspace};
 use serde::{Deserialize, Serialize};
+use shrink::{planner_output_is_unsafe, shrink_scenario};
 use std::env;
 use std::fs;
 use std::process::ExitCode;
@@ -50,6 +52,23 @@ struct Scenario {
     config: Option<PlannerConfig>,
     #[serde(default)]
     seed: Option<u64>,
+}
+
+impl Scenario {
+    /// Fills in the same defaults the bare invocation already applies
+    /// (`config` -> `PlannerConfig::default()`, `seed` -> `1`), turning
+    /// this sparse, hand-authorable shape into shrink.rs's always-fully-
+    /// resolved one.
+    fn resolve(self) -> shrink::Scenario {
+        shrink::Scenario {
+            start: self.start,
+            goal: self.goal,
+            obstacles: self.obstacles,
+            workspace: self.workspace,
+            config: self.config.unwrap_or_default(),
+            seed: self.seed.unwrap_or(1),
+        }
+    }
 }
 
 #[derive(Serialize)]
@@ -151,6 +170,93 @@ fn run_validate(scenario_path: &str, path_path: &str) -> ExitCode {
     }
 }
 
+#[derive(Serialize)]
+#[serde(tag = "status")]
+enum ShrinkOutcome {
+    /// I20's own literal acceptance point, made explicit rather than
+    /// implied: a scenario that never actually violated the planner's
+    /// own safety invariant has nothing to shrink - reported honestly,
+    /// never fabricated into a fake "minimal failure".
+    #[serde(rename = "no_failure")]
+    NoFailure,
+    #[serde(rename = "minimal_failure")]
+    MinimalFailure {
+        issues: Vec<PathSafetyIssue>,
+        scenario: Box<shrink::Scenario>,
+    },
+}
+
+/// I20 ("Verificador independiente y reduccion de casos fallidos"): given
+/// a scenario where `plan()`'s own output fails its own independent
+/// validator (a real soundness bug, not "no path found" - see
+/// shrink::planner_output_is_unsafe's own doc), reduces it to the
+/// smallest scenario that still reproduces the EXACT SAME failure and
+/// reports it - to stdout, or to `out_path` when given, always in the
+/// same JSON shape the plain CLI invocation itself accepts, so the
+/// minimized case is directly replayable.
+fn run_shrink(scenario_path: &str, out_path: Option<&str>) -> ExitCode {
+    let raw = match fs::read_to_string(scenario_path) {
+        Ok(raw) => raw,
+        Err(e) => {
+            eprintln!("[path-planner-3d] could not read {scenario_path}: {e}");
+            return ExitCode::FAILURE;
+        }
+    };
+    let scenario: Scenario = match serde_json::from_str(&raw) {
+        Ok(s) => s,
+        Err(e) => {
+            eprintln!("[path-planner-3d] could not parse {scenario_path}: {e}");
+            return ExitCode::FAILURE;
+        }
+    };
+    let resolved = scenario.resolve();
+
+    let outcome = match planner_output_is_unsafe(&resolved) {
+        None => ShrinkOutcome::NoFailure,
+        Some(_) => {
+            let minimal = shrink_scenario(resolved, |s| planner_output_is_unsafe(s).is_some());
+            // Re-derive the issues against the ACTUAL minimized scenario
+            // (never reuse the original scenario's issue list) - the
+            // real failure that survives shrinking is the one worth
+            // reporting, and shrinking obstacles/workspace can change
+            // which specific segments/waypoints it names.
+            let issues = planner_output_is_unsafe(&minimal)
+                .expect("shrink_scenario's own contract: its result must still satisfy is_failure");
+            ShrinkOutcome::MinimalFailure {
+                issues,
+                scenario: Box::new(minimal),
+            }
+        }
+    };
+
+    let json = match serde_json::to_string_pretty(&outcome) {
+        Ok(json) => json,
+        Err(e) => {
+            eprintln!("[path-planner-3d] could not serialize result: {e}");
+            return ExitCode::FAILURE;
+        }
+    };
+
+    match out_path {
+        Some(path) => {
+            if let Err(e) = fs::write(path, &json) {
+                eprintln!("[path-planner-3d] could not write {path}: {e}");
+                return ExitCode::FAILURE;
+            }
+            println!("[path-planner-3d] wrote {path}");
+        }
+        None => println!("{json}"),
+    }
+
+    match outcome {
+        ShrinkOutcome::NoFailure => ExitCode::SUCCESS,
+        // A real failure was found (and minimized) - non-zero so a CI
+        // script invoking this directly notices, same convention the
+        // bare invocation's own PlanOutcome::Error already uses.
+        ShrinkOutcome::MinimalFailure { .. } => ExitCode::FAILURE,
+    }
+}
+
 fn main() -> ExitCode {
     println!("HYDRA-UMC-PATH-PLANNER-3D v{VERSION}");
     println!("Multi-robot 3D path optimizer: computes collision-free, RRT trajectories for the swarm sharing one workspace.");
@@ -168,9 +274,31 @@ fn main() -> ExitCode {
         return run_validate(scenario_path, path_path);
     }
 
+    if args.get(1).map(String::as_str) == Some("shrink") {
+        let Some(scenario_path) = args.get(2) else {
+            eprintln!(
+                "Usage: hydra-umc-path-planner-3d shrink <scenario.json> [--out <minimal.json>]"
+            );
+            return ExitCode::FAILURE;
+        };
+        let out_path = if args.get(3).map(String::as_str) == Some("--out") {
+            match args.get(4) {
+                Some(p) => Some(p.as_str()),
+                None => {
+                    eprintln!("--out requires a file path");
+                    return ExitCode::FAILURE;
+                }
+            }
+        } else {
+            None
+        };
+        return run_shrink(scenario_path, out_path);
+    }
+
     let Some(scenario_path) = args.get(1) else {
         eprintln!("Usage: hydra-umc-path-planner-3d <scenario.json>");
         eprintln!("       hydra-umc-path-planner-3d validate <scenario.json> <path.json>");
+        eprintln!("       hydra-umc-path-planner-3d shrink <scenario.json> [--out <minimal.json>]");
         eprintln!("See scenarios/example.json for the expected format.");
         return ExitCode::SUCCESS; // printing identity and usage is a valid no-arg invocation, not a failure
     };

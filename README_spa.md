@@ -16,7 +16,7 @@
 
 ---
 
-**Verificación de honestidad - qué funciona de verdad hoy:** la búsqueda RRT de un solo agente en `src/rrt.rs` (con su límite real por reloj de pared `max_duration_ms`, independiente de `max_iterations`), la matemática de colisión esfera/segmento de `src/obstacle.rs`, la matemática vectorial de `src/geometry.rs`, el PRNG determinista de `src/rng.rs`, la puerta de validación de escenarios de `src/semantics.rs`, y la re-verificación de seguridad de una trayectoria ya calculada en `src/validate.rs` son reales y están probados (40 tests, `cargo test`) - cada trayectoria devuelta se verifica libre de obstáculos en los tests, no solo "parece" correcta. La CLI (`run.sh scenarios/example.json`, más el subcomando `validate`) es realmente utilizable hoy. Lo que sigue siendo aspiracional: esto es un RRT plano de un solo hilo, no RRT* (no existe ningún paso de reconexión para optimalidad en el código) ni un coordinador multi-robot - el lenguaje de "hasta 32+ robots simultáneamente" y "generación de rutas en menos de 50ms" en el resto de este README describe un objetivo futuro, no un resultado medido; no hay nada de C++ en todo este repositorio (Cargo.toml tiene exactamente dos dependencias, `serde`/`serde_json`, sin ningún crate de paralelismo/hilos), y es una CLI sobre un archivo de escenario JSON, todavía no un servicio de red conectado a HYDRA-UMC-JOB-DISPATCHER ni validado contra un HYDRA-UMC-TWIN en vivo. Ver `CHANGELOG.md` para lo que ya se ha entregado exactamente, y `mejoras_futuras.txt` para la lista completa y honesta de lo que se ha diferido deliberadamente y por qué.
+**Verificación de honestidad - qué funciona de verdad hoy:** la búsqueda RRT de un solo agente en `src/rrt.rs` (con su límite real por reloj de pared `max_duration_ms`, independiente de `max_iterations`), la matemática de colisión esfera/segmento de `src/obstacle.rs`, la matemática vectorial de `src/geometry.rs`, el PRNG determinista de `src/rng.rs`, la puerta de validación de escenarios de `src/semantics.rs`, y la re-verificación de seguridad de una trayectoria ya calculada en `src/validate.rs` son reales y están probados (48 tests, `cargo test`) - cada trayectoria devuelta se verifica libre de obstáculos en los tests, no solo "parece" correcta. La CLI (`run.sh scenarios/example.json`, más el subcomando `validate`) es realmente utilizable hoy. Lo que sigue siendo aspiracional: esto es un RRT plano de un solo hilo, no RRT* (no existe ningún paso de reconexión para optimalidad en el código) ni un coordinador multi-robot - el lenguaje de "hasta 32+ robots simultáneamente" y "generación de rutas en menos de 50ms" en el resto de este README describe un objetivo futuro, no un resultado medido; no hay nada de C++ en todo este repositorio (Cargo.toml tiene exactamente dos dependencias, `serde`/`serde_json`, sin ningún crate de paralelismo/hilos), y es una CLI sobre un archivo de escenario JSON, todavía no un servicio de red conectado a HYDRA-UMC-JOB-DISPATCHER ni validado contra un HYDRA-UMC-TWIN en vivo. Ver `CHANGELOG.md` para lo que ya se ha entregado exactamente, y `mejoras_futuras.txt` para la lista completa y honesta de lo que se ha diferido deliberadamente y por qué.
 
 ---
 
@@ -147,7 +147,7 @@ de un escenario, sin correr una búsqueda nueva:
 cargo test   # geometria + colision de obstaculos, el PRNG, el
              # planificador RRT (incluyendo su limite real de tiempo por
              # reloj) y la revalidacion de seguridad de validate.rs -
-             # 40 tests en total
+             # 48 tests en total
 ```
 
 ---

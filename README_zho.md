@@ -16,7 +16,7 @@
 
 ---
 
-**诚实核查——今天真正能跑起来的部分：** `src/rrt.rs` 中的单智能体 RRT 搜索（带有真实的、独立于 `max_iterations` 的挂钟时间截止 `max_duration_ms`）、`src/obstacle.rs` 的球体/线段碰撞数学、`src/geometry.rs` 的向量数学、`src/rng.rs` 的确定性 PRNG、`src/semantics.rs` 的场景校验关卡，以及 `src/validate.rs` 对已计算路径的安全性复检，都是真实且经过测试的（40 个测试，`cargo test`）——每一条返回的路径都在测试中被验证为真正无障碍，而不只是看起来合理。CLI（`run.sh scenarios/example.json`，加上 `validate` 子命令）今天确实可用。仍然只是设想的部分：这只是一个单线程的普通 RRT，不是 RRT*（代码中不存在任何优化重连步骤），也不是多机器人协调器——本 README 其他地方出现的"最多可同时为 32+ 台机器人"和"亚 50ms 的路径生成"描述的是未来目标，不是实测结果；本仓库中完全没有任何 C++ 代码（Cargo.toml 恰好只有两个依赖，`serde`/`serde_json`，没有任何并行/线程 crate），而且它目前是一个基于 JSON 场景文件的 CLI，还不是连接到 HYDRA-UMC-JOB-DISPATCHER 的网络服务，也没有对照一个真实运行中的 HYDRA-UMC-TWIN 做过验证。已交付的具体内容见 `CHANGELOG.md`，被刻意推迟的内容及原因的完整、诚实清单见 `mejoras_futuras.txt`。
+**诚实核查——今天真正能跑起来的部分：** `src/rrt.rs` 中的单智能体 RRT 搜索（带有真实的、独立于 `max_iterations` 的挂钟时间截止 `max_duration_ms`）、`src/obstacle.rs` 的球体/线段碰撞数学、`src/geometry.rs` 的向量数学、`src/rng.rs` 的确定性 PRNG、`src/semantics.rs` 的场景校验关卡，以及 `src/validate.rs` 对已计算路径的安全性复检，都是真实且经过测试的（48 个测试，`cargo test`）——每一条返回的路径都在测试中被验证为真正无障碍，而不只是看起来合理。CLI（`run.sh scenarios/example.json`，加上 `validate` 子命令）今天确实可用。仍然只是设想的部分：这只是一个单线程的普通 RRT，不是 RRT*（代码中不存在任何优化重连步骤），也不是多机器人协调器——本 README 其他地方出现的"最多可同时为 32+ 台机器人"和"亚 50ms 的路径生成"描述的是未来目标，不是实测结果；本仓库中完全没有任何 C++ 代码（Cargo.toml 恰好只有两个依赖，`serde`/`serde_json`，没有任何并行/线程 crate），而且它目前是一个基于 JSON 场景文件的 CLI，还不是连接到 HYDRA-UMC-JOB-DISPATCHER 的网络服务，也没有对照一个真实运行中的 HYDRA-UMC-TWIN 做过验证。已交付的具体内容见 `CHANGELOG.md`，被刻意推迟的内容及原因的完整、诚实清单见 `mejoras_futuras.txt`。
 
 ---
 
@@ -143,7 +143,7 @@ run.bat scenarios/example.json
 ```bash
 cargo test   # 几何学 + 障碍物碰撞数学、PRNG、RRT 规划器本身
              #（包括其真实的时钟时间限制），以及 validate.rs 的
-             # 安全性复核——共 40 个测试
+             # 安全性复核——共 48 个测试
 ```
 
 ---

@@ -12,6 +12,7 @@ way) — the output shown is real, not illustrative.
 ```
 $ ./run.sh <scenario.json>
 $ ./run.sh validate <scenario.json> <path.json>
+$ ./run.sh shrink <scenario.json> [--out <minimal.json>]
 ```
 
 `run.sh` execs the built binary (`build/hydra-umc-path-planner-3d` if
@@ -24,10 +25,11 @@ identity/version and role, then the command's own output:
 
 ```
 $ hydra-umc-path-planner-3d
-HYDRA-UMC-PATH-PLANNER-3D v0.0.3
+HYDRA-UMC-PATH-PLANNER-3D v0.0.5
 Multi-robot 3D path optimizer: computes collision-free, RRT trajectories for the swarm sharing one workspace.
 Usage: hydra-umc-path-planner-3d <scenario.json>
        hydra-umc-path-planner-3d validate <scenario.json> <path.json>
+       hydra-umc-path-planner-3d shrink <scenario.json> [--out <minimal.json>]
 See scenarios/example.json for the expected format.
 ```
 
@@ -65,7 +67,7 @@ sides of a workspace, with three spherical obstacles in the way:
 
 ```
 $ hydra-umc-path-planner-3d scenarios/example.json
-HYDRA-UMC-PATH-PLANNER-3D v0.0.3
+HYDRA-UMC-PATH-PLANNER-3D v0.0.5
 Multi-robot 3D path optimizer: computes collision-free, RRT trajectories for the swarm sharing one workspace.
 {
   "status": "ok",
@@ -108,7 +110,7 @@ not a generic "no path found" (exit `1`):
 
 ```
 $ hydra-umc-path-planner-3d scenario-with-start-inside-obstacle.json
-HYDRA-UMC-PATH-PLANNER-3D v0.0.3
+HYDRA-UMC-PATH-PLANNER-3D v0.0.5
 Multi-robot 3D path optimizer: computes collision-free, RRT trajectories for the swarm sharing one workspace.
 {
   "status": "error",
@@ -126,7 +128,7 @@ Spanish; exit `1`):
 
 ```
 $ hydra-umc-path-planner-3d scenarios/does-not-exist.json
-HYDRA-UMC-PATH-PLANNER-3D v0.0.3
+HYDRA-UMC-PATH-PLANNER-3D v0.0.5
 Multi-robot 3D path optimizer: computes collision-free, RRT trajectories for the swarm sharing one workspace.
 [path-planner-3d] could not read scenarios/does-not-exist.json: El sistema no puede encontrar el archivo especificado. (os error 2)
 ```
@@ -136,7 +138,7 @@ Multi-robot 3D path optimizer: computes collision-free, RRT trajectories for the
 ```
 $ echo '{not valid json' > malformed.json
 $ hydra-umc-path-planner-3d malformed.json
-HYDRA-UMC-PATH-PLANNER-3D v0.0.3
+HYDRA-UMC-PATH-PLANNER-3D v0.0.5
 Multi-robot 3D path optimizer: computes collision-free, RRT trajectories for the swarm sharing one workspace.
 [path-planner-3d] could not parse malformed.json: key must be a string at line 1 column 2
 ```
@@ -154,7 +156,7 @@ above for `scenarios/example.json`, re-validated against the same scenario:
 
 ```
 $ hydra-umc-path-planner-3d validate scenarios/example.json real_path.json
-HYDRA-UMC-PATH-PLANNER-3D v0.0.3
+HYDRA-UMC-PATH-PLANNER-3D v0.0.5
 Multi-robot 3D path optimizer: computes collision-free, RRT trajectories for the swarm sharing one workspace.
 {
   "status": "safe"
@@ -174,7 +176,7 @@ check `validate.rs` exists specifically to catch):
 
 ```
 $ hydra-umc-path-planner-3d validate scenarios/example.json unsafe_path.json
-HYDRA-UMC-PATH-PLANNER-3D v0.0.3
+HYDRA-UMC-PATH-PLANNER-3D v0.0.5
 Multi-robot 3D path optimizer: computes collision-free, RRT trajectories for the swarm sharing one workspace.
 {
   "status": "unsafe",
@@ -195,18 +197,51 @@ Exits `1`.
 
 ```
 $ hydra-umc-path-planner-3d validate scenarios/example.json
-HYDRA-UMC-PATH-PLANNER-3D v0.0.3
+HYDRA-UMC-PATH-PLANNER-3D v0.0.5
 Multi-robot 3D path optimizer: computes collision-free, RRT trajectories for the swarm sharing one workspace.
 Usage: hydra-umc-path-planner-3d validate <scenario.json> <path.json>
 <path.json> is a bare JSON array of {"x":.., "y":.., "z":..} waypoints.
 ```
 
+### `shrink <scenario.json> [--out <minimal.json>]`
+
+I20 ("Verificador independiente y reducción de casos fallidos"): checks
+whether `plan()`'s own output would fail `validate.rs`'s own independent
+validator — a real soundness bug, never "no path found" (a genuinely
+different, honest outcome this command never reports as a failure to
+shrink). When it does, reduces the scenario to the smallest one that
+still reproduces the *exact same* failure (deleting obstacles, then
+tightening the workspace and `max_iterations` — see `src/shrink.rs`'s own
+module doc for the full, honestly-scoped rule set) and reports it, either
+to stdout or to `--out`'s file, in the same JSON shape the plain
+`<scenario.json>` invocation itself accepts — a minimized failure is
+directly replayable, never a shape a human has to hand-translate.
+
+**No failure** — the repo's own `scenarios/example.json` has never
+violated this invariant, reported honestly rather than fabricating a
+"minimal failure" out of nothing:
+
+```
+$ hydra-umc-path-planner-3d shrink scenarios/example.json
+HYDRA-UMC-PATH-PLANNER-3D v0.0.5
+Multi-robot 3D path optimizer: computes collision-free, RRT trajectories for the swarm sharing one workspace.
+{
+  "status": "no_failure"
+}
+```
+
+Exits `0`.
+
+`--out <minimal.json>` writes the same JSON to a file instead of stdout
+(printing `[path-planner-3d] wrote <path>` instead) — useful for saving a
+real minimal-failure scenario as a regression fixture once one is found.
+
 ## Exit codes
 
 | Code | Meaning |
 |------|---------|
-| `0` | ok — a path was found (`status: "ok"`), or `validate` reports `status: "safe"`, or bare/no-argument usage output |
-| `1` | planner error (`status: "error"`), `validate` reports `status: "unsafe"`, missing/unreadable/malformed scenario or path file, or missing `validate` arguments |
+| `0` | ok — a path was found (`status: "ok"`), or `validate` reports `status: "safe"`, or `shrink` reports `status: "no_failure"`, or bare/no-argument usage output |
+| `1` | planner error (`status: "error"`), `validate` reports `status: "unsafe"`, `shrink` reports `status: "minimal_failure"` (a real bug was found and minimized), missing/unreadable/malformed scenario or path file, or missing `validate`/`shrink` arguments |
 
 ## Not yet wired in
 
