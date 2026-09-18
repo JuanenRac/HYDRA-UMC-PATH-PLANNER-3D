@@ -7,13 +7,15 @@
 // not yet multi-robot-synchronized (plans one agent through a static
 // obstacle set, does not coordinate several agents' paths against each
 // other). Both are real, scoped-out future work: proving a
-// single-agent planner correct came first. Nearest-neighbor lookup is a
-// linear scan over the tree, not a KD-tree - fine at the tree sizes a
-// single planning call produces today (hundreds to a few thousand
-// nodes), and simpler to verify correct than a KD-tree would have been
-// for this first pass.
+// single-agent planner correct came first. Nearest-neighbor lookup uses
+// a real, incremental KD-tree (kdtree.rs) - that module's own tests
+// verify it stays exactly equivalent (same index on every tie, not just
+// "a" valid nearest neighbor) to a real independent linear scan across
+// many random insertion/query sequences, which is what actually lets
+// this file's own seed-determinism tests below keep passing unchanged.
 
 use crate::geometry::Vec3;
+use crate::kdtree::KdTree;
 use crate::obstacle::Obstacle;
 use crate::rng::Xorshift64Star;
 use serde::{Deserialize, Serialize};
@@ -163,6 +165,8 @@ pub fn plan(
         point: start,
         parent: None,
     }];
+    let mut kd = KdTree::new();
+    kd.insert(start, 0);
 
     let is_clear = |a: Vec3, b: Vec3| -> bool {
         !obstacles
@@ -186,7 +190,7 @@ pub fn plan(
             workspace.sample(&mut rng)
         };
 
-        let nearest_idx = nearest(&tree, sample);
+        let nearest_idx = kd.nearest(sample);
         let nearest_point = tree[nearest_idx].point;
 
         let to_sample = sample.sub(nearest_point);
@@ -206,6 +210,7 @@ pub fn plan(
             parent: Some(nearest_idx),
         });
         let new_idx = tree.len() - 1;
+        kd.insert(new_point, new_idx);
 
         if new_point.distance(goal) <= config.goal_threshold && is_clear(new_point, goal) {
             tree.push(TreeNode {
@@ -217,19 +222,6 @@ pub fn plan(
     }
 
     Err(PlanError::NoPathFound)
-}
-
-fn nearest(tree: &[TreeNode], target: Vec3) -> usize {
-    tree.iter()
-        .enumerate()
-        .min_by(|(_, a), (_, b)| {
-            a.point
-                .distance(target)
-                .partial_cmp(&b.point.distance(target))
-                .expect("distance() never produces NaN for finite inputs")
-        })
-        .map(|(idx, _)| idx)
-        .expect("tree always has at least the start node")
 }
 
 fn reconstruct_path(tree: &[TreeNode], mut idx: usize) -> Vec<Vec3> {

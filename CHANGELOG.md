@@ -18,6 +18,23 @@ semantic-versioning judgment calls:
 
 ---
 
+## [0.0.6] - Real incremental KD-tree for nearest-neighbor lookup
+
+- **`kdtree.rs`** (new) - a real, incremental 3D KD-tree replacing
+  `rrt.rs`'s own linear scan, the deliberate v0 choice that file's own
+  header comment already named as real follow-up work once proven
+  correct. Insertion-only (no rebalancing - the RRT tree only ever
+  grows during a single `plan()` call, never removes a node), with
+  explicit lowest-index tie-breaking so a query with more than one
+  equidistant match returns the exact same index the old
+  `Iterator::min_by`-based linear scan would have - verified directly
+  against a real, independent linear scan across many random
+  insertion/query sequences (500 points x 20 seeds, checked
+  incrementally as the tree grows, not just once at the end), not just
+  "the distance looks right". `rrt.rs`'s own existing seed-determinism
+  tests pass unchanged, confirming real planning output is identical to
+  before this swap. 6 new tests, 51 total.
+
 ## [0.0.5] - I20: real case-minimization for a failing scenario
 
 I20 ("Verificador independiente y reducción de casos fallidos"):
