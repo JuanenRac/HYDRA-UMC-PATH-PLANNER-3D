@@ -19,6 +19,7 @@
 // deliberately deferred future work, not forgotten.
 
 mod geometry;
+mod kdtree;
 mod obstacle;
 mod rng;
 mod rrt;
