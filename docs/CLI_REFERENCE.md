@@ -205,8 +205,7 @@ Usage: hydra-umc-path-planner-3d validate <scenario.json> <path.json>
 
 ### `shrink <scenario.json> [--out <minimal.json>]`
 
-I20 ("Verificador independiente y reducción de casos fallidos"): checks
-whether `plan()`'s own output would fail `validate.rs`'s own independent
+Checks whether `plan()`'s own output would fail `validate.rs`'s own independent
 validator — a real soundness bug, never "no path found" (a genuinely
 different, honest outcome this command never reports as a failure to
 shrink). When it does, reduces the scenario to the smallest one that

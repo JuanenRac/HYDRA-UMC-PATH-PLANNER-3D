@@ -35,9 +35,8 @@ semantic-versioning judgment calls:
   tests pass unchanged, confirming real planning output is identical to
   before this swap. 6 new tests, 51 total.
 
-## [0.0.5] - I20: real case-minimization for a failing scenario
+## [0.0.5] - real case-minimization for a failing scenario
 
-I20 ("Verificador independiente y reducción de casos fallidos"):
 `validate.rs` already answers "is this exact path safe against this
 exact scenario, right now" - the independent verifier the idea calls
 for. What was still missing: when the one real soundness property this
