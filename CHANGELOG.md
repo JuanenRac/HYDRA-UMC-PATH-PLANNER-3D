@@ -18,6 +18,10 @@ semantic-versioning judgment calls:
 
 ---
 
+## [0.0.7] - Frame label
+
+- A scenario may declare an optional frame name (at most 64 bytes); it is echoed in the plan and validation result and never changes a coordinate. An empty or over-long name is refused.
+
 ## [0.0.6] - Real incremental KD-tree for nearest-neighbor lookup
 
 - **`kdtree.rs`** (new) - a real, incremental 3D KD-tree replacing

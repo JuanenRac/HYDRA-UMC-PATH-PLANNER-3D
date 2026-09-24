@@ -131,6 +131,8 @@ see `src/rrt.rs`'s `PlanError` for the full, honest list, including the
 case where no path exists at all, not just one the search failed to find
 in time).
 
+An optional `frame` (a short name, at most 64 bytes) records the coordinate frame the scenario is written in. It is only a label: it is echoed in the result and never changes a coordinate.
+
 A second real subcommand re-checks an already-computed path (a bare JSON
 array of `{x, y, z}` waypoints) for safety against a scenario's current
 obstacles/workspace, without running a new search:

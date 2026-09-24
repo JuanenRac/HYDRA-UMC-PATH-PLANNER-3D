@@ -134,6 +134,8 @@ siehe `PlanError` in `src/rrt.rs` für die vollständige, ehrliche Liste,
 einschließlich des Falls, dass gar keine Route existiert, nicht nur
 einer, die die Suche nicht rechtzeitig fand).
 
+Ein optionales `frame` (ein kurzer Name, höchstens 64 Bytes) gibt das Koordinatensystem an, in dem das Szenario geschrieben ist. Es ist nur eine Bezeichnung: Sie wird im Ergebnis wiederholt und ändert nie eine Koordinate.
+
 Ein zweiter echter Unterbefehl prüft einen bereits berechneten Pfad (ein
 einfaches JSON-Array von `{x, y, z}`-Wegpunkten) erneut gegen die
 aktuellen Hindernisse/den Arbeitsbereich eines Szenarios, ohne eine neue
