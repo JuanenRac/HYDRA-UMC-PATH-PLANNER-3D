@@ -106,7 +106,7 @@ pub enum PlanError {
     /// the whole budget and found nothing" apart from "ran out of wall
     /// clock, unknown whether a path exists".
     TimeLimitExceeded,
-    /// PATH-01: the scenario's own numeric inputs are not physically
+    /// the scenario's own numeric inputs are not physically
     /// valid (negative/non-finite radius, inverted workspace bound,
     /// out-of-range planner parameter) - rejected before any real
     /// geometry check runs, never silently treated as "no path found".
@@ -130,7 +130,7 @@ pub fn plan(
     config: PlannerConfig,
     seed: u64,
 ) -> Result<Vec<Vec3>, PlanError> {
-    // PATH-01: reject a semantically invalid scenario before any real
+    // reject a semantically invalid scenario before any real
     // geometry check runs against it - see semantics.rs's own module
     // doc for why a negative robot_radius/obstacle radius or an
     // inverted workspace bound must never be allowed to silently defeat
@@ -265,7 +265,7 @@ mod tests {
         assert!(path.len() >= 2);
     }
 
-    // PATH-01 (P0): a negative robot_radius must reject the plan outright, not
+    // a negative robot_radius must reject the plan outright, not
     // let obstacle.rs's own effective-radius arithmetic go negative and
     // silently defeat every collision check the search relies on.
     #[test]

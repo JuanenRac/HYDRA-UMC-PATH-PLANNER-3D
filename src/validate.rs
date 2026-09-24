@@ -46,7 +46,7 @@ pub enum PathSafetyIssue {
         from_index: usize,
         to_index: usize,
     },
-    /// PATH-01 (P0): the scenario's own numeric inputs (robot_radius, obstacle
+    /// the scenario's own numeric inputs (robot_radius, obstacle
     /// geometry, workspace bounds) are not physically valid - checked
     /// BEFORE any geometry test below runs, so a negative robot_radius
     /// (e.g. -2 against an obstacle radius of 1) can never again make
@@ -73,7 +73,7 @@ pub fn validate_path(
         return vec![PathSafetyIssue::EmptyPath];
     }
 
-    // PATH-01: a semantically invalid scenario (negative/non-finite
+    // a semantically invalid scenario (negative/non-finite
     // robot_radius or obstacle radius, an inverted workspace bound)
     // must never reach the geometry checks below at all - every one of
     // them silently trusts robot_radius/obstacle.radius to be real,
@@ -237,7 +237,7 @@ mod tests {
         );
     }
 
-    // PATH-01 (P0): the finding's own exact reproduction - a negative
+    // the finding's own exact reproduction - a negative
     // robot_radius (-2) against an obstacle of radius 1 makes the
     // effective collision radius negative (1 + -2 = -1), which no real
     // distance can ever satisfy. Before this fix, a straight segment
