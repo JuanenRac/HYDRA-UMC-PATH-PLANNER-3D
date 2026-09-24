@@ -89,7 +89,7 @@ fn plan_error_reason(e: PlanError) -> String {
         PlanError::GoalOutsideWorkspace => "goal_outside_workspace".to_string(),
         PlanError::NoPathFound => "no_path_found".to_string(),
         PlanError::TimeLimitExceeded => "time_limit_exceeded".to_string(),
-        // PATH-01: carries the real, specific reason (which numeric
+        // carries the real, specific reason (which numeric
         // input was invalid) instead of a single generic label - an
         // operator seeing this in the JSON output can tell exactly what
         // to fix in the scenario file.
@@ -174,7 +174,7 @@ fn run_validate(scenario_path: &str, path_path: &str) -> ExitCode {
 #[derive(Serialize)]
 #[serde(tag = "status")]
 enum ShrinkOutcome {
-    /// I20's own literal acceptance point, made explicit rather than
+    /// this project's own literal acceptance point, made explicit rather than
     /// implied: a scenario that never actually violated the planner's
     /// own safety invariant has nothing to shrink - reported honestly,
     /// never fabricated into a fake "minimal failure".
@@ -187,7 +187,7 @@ enum ShrinkOutcome {
     },
 }
 
-/// I20 ("Verificador independiente y reduccion de casos fallidos"): given
+/// ("Verificador independiente y reduccion de casos fallidos"): given
 /// a scenario where `plan()`'s own output fails its own independent
 /// validator (a real soundness bug, not "no path found" - see
 /// shrink::planner_output_is_unsafe's own doc), reduces it to the

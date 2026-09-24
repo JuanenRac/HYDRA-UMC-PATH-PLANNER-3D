@@ -2,7 +2,7 @@
 // Copyright (C) 2026 JuanenRac (Electro Hobby 3D) <electrohobby3d@gmail.com>
 // GPL-3.0 - see LICENSE
 //
-// I20 ("Verificador independiente y reduccion de casos fallidos"):
+// ("Verificador independiente y reduccion de casos fallidos"):
 // validate.rs already answers "is this exact path safe against this
 // exact scenario, right now" - the independent verifier the idea calls
 // for. What was still missing: when a real property this crate cares
