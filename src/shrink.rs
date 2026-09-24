@@ -48,6 +48,11 @@ pub struct Scenario {
     pub workspace: Workspace,
     pub config: PlannerConfig,
     pub seed: u64,
+    /// Name of the coordinate frame the scenario is written in. A label
+    /// only: it is carried through unchanged and never used to transform
+    /// a coordinate.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub frame: Option<String>,
 }
 
 /// The one real soundness property this crate's own test suite already
@@ -269,6 +274,7 @@ mod tests {
                 ..Default::default()
             },
             seed: 7,
+            frame: None,
         }
     }
 
@@ -392,6 +398,7 @@ mod tests {
                     ..Default::default()
                 },
                 seed: 7,
+                frame: None,
             };
             assert!(
                 planner_output_is_unsafe(&scenario).is_none(),
@@ -416,6 +423,7 @@ mod tests {
                 ..Default::default()
             },
             seed: 3,
+            frame: None,
         };
         assert!(planner_output_is_unsafe(&scenario).is_none());
     }

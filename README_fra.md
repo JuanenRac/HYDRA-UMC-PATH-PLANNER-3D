@@ -133,6 +133,8 @@ voir le `PlanError` de `src/rrt.rs` pour la liste complète et honnête, y
 compris le cas où aucune trajectoire n'existe du tout, pas seulement une
 que la recherche n'a pas trouvée à temps).
 
+Un `frame` optionnel (un nom court, 64 octets au maximum) indique le repère dans lequel le scénario est écrit. Ce n'est qu'une étiquette : elle est reprise dans le résultat et ne modifie jamais une coordonnée.
+
 Une seconde sous-commande réelle revérifie une trajectoire déjà calculée
 (un simple tableau JSON de points `{x, y, z}`) par rapport aux
 obstacles/à l'espace de travail actuels d'un scénario, sans relancer de

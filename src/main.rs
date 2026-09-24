@@ -53,6 +53,8 @@ struct Scenario {
     config: Option<PlannerConfig>,
     #[serde(default)]
     seed: Option<u64>,
+    #[serde(default)]
+    frame: Option<String>,
 }
 
 impl Scenario {
@@ -68,6 +70,7 @@ impl Scenario {
             workspace: self.workspace,
             config: self.config.unwrap_or_default(),
             seed: self.seed.unwrap_or(1),
+            frame: self.frame,
         }
     }
 }
@@ -76,9 +79,30 @@ impl Scenario {
 #[serde(tag = "status")]
 enum PlanOutcome {
     #[serde(rename = "ok")]
-    Ok { path: Vec<Vec3> },
+    Ok {
+        path: Vec<Vec3>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        frame: Option<String>,
+    },
     #[serde(rename = "error")]
     Error { reason: String },
+}
+
+const MAX_FRAME_NAME_LEN: usize = 64;
+
+/// The frame name a scenario declares, if any. It is a label carried into
+/// the result so a caller can check the path is in the frame it expects; it
+/// never changes a coordinate. An empty or over-long name is refused rather
+/// than passed on.
+fn checked_frame(frame: Option<&str>) -> Result<Option<String>, String> {
+    match frame {
+        None => Ok(None),
+        Some(name) if name.trim().is_empty() => Err("frame must not be empty".to_string()),
+        Some(name) if name.len() > MAX_FRAME_NAME_LEN => {
+            Err(format!("frame must be at most {MAX_FRAME_NAME_LEN} bytes"))
+        }
+        Some(name) => Ok(Some(name.to_string())),
+    }
 }
 
 fn plan_error_reason(e: PlanError) -> String {
@@ -101,7 +125,10 @@ fn plan_error_reason(e: PlanError) -> String {
 #[serde(tag = "status")]
 enum ValidateOutcome {
     #[serde(rename = "safe")]
-    Safe,
+    Safe {
+        #[serde(skip_serializing_if = "Option::is_none")]
+        frame: Option<String>,
+    },
     #[serde(rename = "unsafe")]
     Unsafe { issues: Vec<PathSafetyIssue> },
 }
@@ -142,6 +169,13 @@ fn run_validate(scenario_path: &str, path_path: &str) -> ExitCode {
         }
     };
 
+    let frame = match checked_frame(scenario.frame.as_deref()) {
+        Ok(frame) => frame,
+        Err(reason) => {
+            eprintln!("[path-planner-3d] invalid scenario {scenario_path}: {reason}");
+            return ExitCode::FAILURE;
+        }
+    };
     let robot_radius = scenario.config.unwrap_or_default().robot_radius;
     let issues = validate_path(
         &path,
@@ -151,7 +185,7 @@ fn run_validate(scenario_path: &str, path_path: &str) -> ExitCode {
     );
     let is_safe = issues.is_empty();
     let outcome = if is_safe {
-        ValidateOutcome::Safe
+        ValidateOutcome::Safe { frame }
     } else {
         ValidateOutcome::Unsafe { issues }
     };
@@ -320,6 +354,19 @@ fn main() -> ExitCode {
         }
     };
 
+    let frame = match checked_frame(scenario.frame.as_deref()) {
+        Ok(frame) => frame,
+        Err(reason) => {
+            let outcome = PlanOutcome::Error {
+                reason: format!("invalid_input: {reason}"),
+            };
+            match serde_json::to_string_pretty(&outcome) {
+                Ok(json) => println!("{json}"),
+                Err(e) => eprintln!("[path-planner-3d] could not serialize result: {e}"),
+            }
+            return ExitCode::FAILURE;
+        }
+    };
     let config = scenario.config.unwrap_or_default();
     let seed = scenario.seed.unwrap_or(1);
 
@@ -331,7 +378,7 @@ fn main() -> ExitCode {
         config,
         seed,
     ) {
-        Ok(path) => PlanOutcome::Ok { path },
+        Ok(path) => PlanOutcome::Ok { path, frame },
         Err(e) => PlanOutcome::Error {
             reason: plan_error_reason(e),
         },
@@ -350,5 +397,55 @@ fn main() -> ExitCode {
         ExitCode::SUCCESS
     } else {
         ExitCode::FAILURE
+    }
+}
+
+#[cfg(test)]
+mod frame_tests {
+    use super::*;
+
+    #[test]
+    fn no_frame_is_allowed_and_stays_absent() {
+        assert_eq!(checked_frame(None), Ok(None));
+    }
+
+    #[test]
+    fn a_named_frame_is_carried_unchanged() {
+        assert_eq!(
+            checked_frame(Some("robot_base")),
+            Ok(Some("robot_base".to_string()))
+        );
+    }
+
+    #[test]
+    fn an_empty_or_over_long_frame_is_refused() {
+        assert!(checked_frame(Some("")).is_err());
+        assert!(checked_frame(Some("   ")).is_err());
+        assert!(checked_frame(Some(&"x".repeat(MAX_FRAME_NAME_LEN + 1))).is_err());
+        assert!(checked_frame(Some(&"x".repeat(MAX_FRAME_NAME_LEN))).is_ok());
+    }
+
+    #[test]
+    fn the_frame_appears_in_the_output_only_when_given() {
+        let with = serde_json::to_value(PlanOutcome::Ok {
+            path: vec![],
+            frame: Some("world".into()),
+        })
+        .unwrap();
+        assert_eq!(with["frame"], "world");
+        let without = serde_json::to_value(PlanOutcome::Ok {
+            path: vec![],
+            frame: None,
+        })
+        .unwrap();
+        assert!(without.get("frame").is_none());
+    }
+
+    #[test]
+    fn a_scenario_file_may_declare_a_frame() {
+        let raw = r#"{"start":{"x":0,"y":0,"z":0},"goal":{"x":1,"y":0,"z":0},
+            "workspace":{"min":{"x":-2,"y":-2,"z":-2},"max":{"x":2,"y":2,"z":2}},"frame":"table"}"#;
+        let scenario: Scenario = serde_json::from_str(raw).unwrap();
+        assert_eq!(scenario.resolve().frame.as_deref(), Some("table"));
     }
 }

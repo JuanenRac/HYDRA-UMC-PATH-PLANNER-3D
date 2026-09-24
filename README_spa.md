@@ -133,6 +133,8 @@ ver el `PlanError` de `src/rrt.rs` para la lista completa y honesta,
 incluyendo el caso en que directamente no existe ninguna ruta, no solo
 una que la búsqueda no encontró a tiempo).
 
+Un `frame` opcional (un nombre corto, de 64 bytes como máximo) indica el sistema de coordenadas en el que está escrito el escenario. Es solo una etiqueta: se repite en el resultado y nunca cambia una coordenada.
+
 Un segundo subcomando real revalida una ruta ya calculada (un array JSON
 plano de waypoints `{x, y, z}`) contra los obstáculos/workspace actuales
 de un escenario, sin correr una búsqueda nueva:

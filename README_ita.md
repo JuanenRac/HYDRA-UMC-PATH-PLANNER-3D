@@ -132,6 +132,8 @@ vedi il `PlanError` di `src/rrt.rs` per l'elenco completo e onesto,
 incluso il caso in cui semplicemente non esiste alcun percorso, non solo
 uno che la ricerca non ha trovato in tempo).
 
+Un `frame` opzionale (un nome breve, al massimo 64 byte) indica il sistema di coordinate in cui è scritto lo scenario. È solo un'etichetta: viene riportata nel risultato e non modifica mai una coordinata.
+
 Un secondo sottocomando reale riverifica un percorso già calcolato (un
 semplice array JSON di waypoint `{x, y, z}`) rispetto agli
 ostacoli/workspace attuali di uno scenario, senza eseguire una nuova
