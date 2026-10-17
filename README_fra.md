@@ -4,7 +4,7 @@
 
 # 🗺️ HYDRA-UMC-PATH-PLANNER-3D
 
-<p align="center"><a href="README.md">🇺🇸 English</a> | <a href="README_spa.md">🇪🇸 Español</a> | 🇫🇷 <b>Français</b> | <a href="README_ita.md">🇮🇹 Italiano</a> | <a href="README_deu.md">🇩🇪 Deutsch</a> | <a href="README_zho.md">🇨🇳 简体中文</a> | <a href="README_jpn.md">🇯🇵 日本語</a></p>
+<p align="center"><a href="README.md">🇺🇸 English</a> | <a href="README_spa.md">🇪🇸 Español</a> | 🇫🇷 <b>Français</b> | <a href="README_ita.md">🇮🇹 Italiano</a> | <a href="README_deu.md">🇩🇪 Deutsch</a> | <a href="README_zho.md">🇨🇳 简体中文</a> | <a href="README_jpn.md">🇯🇵 日本語</a> | <a href="README_por.md">🇵🇹 Português</a></p>
 
 ### 📐 Optimiseur de trajectoire 3D multi-robot et moteur d'évitement de collision
 
@@ -16,7 +16,7 @@
 
 ---
 
-**Vérification d'honnêteté - ce qui fonctionne réellement aujourd'hui :** la recherche RRT à agent unique dans `src/rrt.rs` (avec sa véritable échéance `max_duration_ms` basée sur l'horloge réelle, indépendante de `max_iterations`), les calculs de collision sphère/segment de `src/obstacle.rs`, les calculs vectoriels de `src/geometry.rs`, le PRNG déterministe de `src/rng.rs`, la porte de validation de scénario de `src/semantics.rs`, et la revérification de sécurité d'une trajectoire déjà calculée dans `src/validate.rs` sont réels et testés (48 tests, `cargo test`) - chaque trajectoire renvoyée est vérifiée sans collision dans les tests, pas seulement plausible. La CLI (`run.sh scenarios/example.json`, plus la sous-commande `validate`) est réellement utilisable aujourd'hui. Ce qui reste aspirationnel : il s'agit d'un RRT simple à un seul thread, pas d'un RRT* (aucune passe de reconnexion pour l'optimalité n'existe dans le code) ni d'un coordinateur multi-robot - les mentions « jusqu'à plus de 32 robots simultanément » et « génération de trajectoire en moins de 50 ms » ailleurs dans ce README décrivent un objectif futur, pas un résultat mesuré ; il n'y a aucun C++ nulle part dans ce dépôt (Cargo.toml a exactement deux dépendances, `serde`/`serde_json`, aucun crate de parallélisme/threads), et c'est une CLI sur un fichier de scénario JSON, pas encore un service réseau relié à HYDRA-UMC-JOB-DISPATCHER ni validé contre un HYDRA-UMC-TWIN en direct. Voir `CHANGELOG.md` pour ce qui a déjà été livré exactement, et `mejoras_futuras.txt` pour la liste complète et honnête de ce qui est délibérément reporté et pourquoi.
+**Vérification d'honnêteté - ce qui fonctionne réellement aujourd'hui :** la recherche RRT à agent unique dans `src/rrt.rs` (avec sa véritable échéance `max_duration_ms` basée sur l'horloge réelle, indépendante de `max_iterations`), les calculs de collision sphère/segment de `src/obstacle.rs`, les calculs vectoriels de `src/geometry.rs`, le PRNG déterministe de `src/rng.rs`, la porte de validation de scénario de `src/semantics.rs`, et la revérification de sécurité d'une trajectoire déjà calculée dans `src/validate.rs` sont réels et testés (56 tests, `cargo test`) - chaque trajectoire renvoyée est vérifiée sans collision dans les tests, pas seulement plausible. La CLI (`run.sh scenarios/example.json`, plus la sous-commande `validate`) est réellement utilisable aujourd'hui. Ce qui reste aspirationnel : il s'agit d'un RRT simple à un seul thread, pas d'un RRT* (aucune passe de reconnexion pour l'optimalité n'existe dans le code) ni d'un coordinateur multi-robot - les mentions « jusqu'à plus de 32 robots simultanément » et « génération de trajectoire en moins de 50 ms » ailleurs dans ce README décrivent un objectif futur, pas un résultat mesuré ; il n'y a aucun C++ nulle part dans ce dépôt (Cargo.toml a exactement deux dépendances, `serde`/`serde_json`, aucun crate de parallélisme/threads), et c'est une CLI sur un fichier de scénario JSON, pas encore un service réseau relié à HYDRA-UMC-JOB-DISPATCHER ni validé contre un HYDRA-UMC-TWIN en direct. Voir `CHANGELOG.md` pour ce qui a déjà été livré exactement, et `mejoras_futuras.txt` pour la liste complète et honnête de ce qui est délibérément reporté et pourquoi.
 
 ---
 
@@ -150,7 +150,7 @@ recherche :
 cargo test   # geometrie + collision d'obstacles, le PRNG, le
              # planificateur RRT (y compris sa vraie limite de temps par
              # horloge) et la revérification de sécurité de validate.rs -
-             # 48 tests au total
+             # 56 tests au total
 ```
 
 ---
