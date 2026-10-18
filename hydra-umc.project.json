@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "ecosystem": "HYDRA-UMC",
   "name": "HYDRA-UMC-PATH-PLANNER-3D",
-  "version": "0.0.9",
+  "version": "0.1.0",
   "role": "library",
   "stack": "rust",
   "technologies": [
@@ -10,7 +10,7 @@
     "RRT* path planning"
   ],
   "deployment_target": "cm5",
-  "maturity": "established",
+  "maturity": "functional",
   "family": "Orchestration & Swarm",
   "parent": "HYDRA-UMC-ORCHESTRATOR",
   "build": "cargo build --release",
