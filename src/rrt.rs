@@ -28,25 +28,31 @@ pub struct Workspace {
 }
 
 impl Workspace {
-    pub fn contains(&self, p: Vec3) -> bool {
-        p.x >= self.min.x
-            && p.x <= self.max.x
-            && p.y >= self.min.y
-            && p.y <= self.max.y
-            && p.z >= self.min.z
-            && p.z <= self.max.z
+    /// Is a robot of radius `margin` centred on `p` entirely inside the
+    /// workspace? The workspace is the volume the whole body must stay in
+    /// (walls, the next cell), not only its centre: a centre touching the
+    /// wall leaves half of the body outside it.
+    pub fn contains_with_margin(&self, p: Vec3, margin: f64) -> bool {
+        p.x >= self.min.x + margin
+            && p.x <= self.max.x - margin
+            && p.y >= self.min.y + margin
+            && p.y <= self.max.y - margin
+            && p.z >= self.min.z + margin
+            && p.z <= self.max.z - margin
     }
 
-    fn sample(&self, rng: &mut Xorshift64Star) -> Vec3 {
+    /// A point of the workspace a robot of radius `margin` can be centred on.
+    fn sample(&self, rng: &mut Xorshift64Star, margin: f64) -> Vec3 {
         Vec3::new(
-            rng.next_range(self.min.x, self.max.x),
-            rng.next_range(self.min.y, self.max.y),
-            rng.next_range(self.min.z, self.max.z),
+            rng.next_range(self.min.x + margin, self.max.x - margin),
+            rng.next_range(self.min.y + margin, self.max.y - margin),
+            rng.next_range(self.min.z + margin, self.max.z - margin),
         )
     }
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[serde(default)]
 pub struct PlannerConfig {
     pub max_iterations: u32,
     pub step_size: f64,
@@ -62,7 +68,8 @@ pub struct PlannerConfig {
     /// dimensionless point would.
     pub robot_radius: f64,
     /// Wall-clock budget for the search, independent of
-    /// `max_iterations`. `None` (the default) means no time limit -
+    /// `max_iterations` (which is itself capped, see
+    /// `semantics::MAX_ITERATIONS_LIMIT`). `None` (the default) means no time limit -
     /// existing scenarios/tests that never set this field behave
     /// exactly as before. A real time limit matters because
     /// `max_iterations` alone cannot bound wall-clock time: a scene
@@ -140,11 +147,13 @@ pub fn plan(
     crate::semantics::validate_obstacles(obstacles).map_err(PlanError::InvalidInput)?;
     crate::semantics::validate_point(start).map_err(PlanError::InvalidInput)?;
     crate::semantics::validate_point(goal).map_err(PlanError::InvalidInput)?;
+    crate::semantics::validate_workspace_fits_robot(&workspace, config.robot_radius)
+        .map_err(PlanError::InvalidInput)?;
 
-    if !workspace.contains(start) {
+    if !workspace.contains_with_margin(start, config.robot_radius) {
         return Err(PlanError::StartOutsideWorkspace);
     }
-    if !workspace.contains(goal) {
+    if !workspace.contains_with_margin(goal, config.robot_radius) {
         return Err(PlanError::GoalOutsideWorkspace);
     }
     if obstacles
@@ -158,6 +167,11 @@ pub fn plan(
         .any(|o| o.contains_point(goal, config.robot_radius))
     {
         return Err(PlanError::GoalInsideObstacle);
+    }
+
+    if start == goal {
+        // already there: the path is the one waypoint
+        return Ok(vec![start]);
     }
 
     let mut rng = Xorshift64Star::new(seed);
@@ -187,7 +201,7 @@ pub fn plan(
         let sample = if rng.next_f64() < config.goal_bias {
             goal
         } else {
-            workspace.sample(&mut rng)
+            workspace.sample(&mut rng, config.robot_radius)
         };
 
         let nearest_idx = kd.nearest(sample);
@@ -213,6 +227,12 @@ pub fn plan(
         kd.insert(new_point, new_idx);
 
         if new_point.distance(goal) <= config.goal_threshold && is_clear(new_point, goal) {
+            // when the new node already is the goal (a goal-biased sample
+            // close enough to land on it) it is the end of the path: adding
+            // the goal again would end the path with a segment of length 0
+            if new_point == goal {
+                return Ok(reconstruct_path(&tree, new_idx));
+            }
             tree.push(TreeNode {
                 point: goal,
                 parent: Some(new_idx),
@@ -467,5 +487,136 @@ mod tests {
             3,
         );
         assert_eq!(result, Err(PlanError::NoPathFound));
+    }
+
+    #[test]
+    fn the_body_not_only_the_centre_must_fit_inside_the_workspace() {
+        let workspace = Workspace {
+            min: Vec3::new(-0.9, -0.9, -0.9),
+            max: Vec3::new(0.9, 0.9, 0.9),
+        };
+        let config = PlannerConfig {
+            robot_radius: 0.5,
+            ..PlannerConfig::default()
+        };
+        let result = plan(
+            Vec3::new(-0.85, 0.0, 0.0),
+            Vec3::new(0.85, 0.0, 0.0),
+            &[],
+            workspace,
+            config,
+            1,
+        );
+        assert_eq!(result, Err(PlanError::StartOutsideWorkspace));
+        let wall_to_wall = Workspace {
+            min: Vec3::new(-0.4, -5.0, -5.0),
+            max: Vec3::new(0.4, 5.0, 5.0),
+        };
+        assert_eq!(
+            plan(
+                Vec3::new(0.0, 0.0, 0.0),
+                Vec3::new(0.0, 1.0, 0.0),
+                &[],
+                wall_to_wall,
+                config,
+                1
+            ),
+            Err(PlanError::InvalidInput(
+                crate::semantics::InvalidScenarioReason::WorkspaceNarrowerThanRobot
+            ))
+        );
+    }
+
+    #[test]
+    fn a_sampled_goal_does_not_end_the_path_with_a_zero_length_segment() {
+        let config = PlannerConfig {
+            goal_bias: 1.0,
+            step_size: 0.5,
+            goal_threshold: 0.5,
+            ..PlannerConfig::default()
+        };
+        let path = plan(
+            Vec3::new(0.0, 0.0, 0.0),
+            Vec3::new(0.3, 0.0, 0.0),
+            &[],
+            open_workspace(),
+            config,
+            1,
+        )
+        .unwrap();
+        for pair in path.windows(2) {
+            assert!(
+                pair[0].distance(pair[1]) > 0.0,
+                "path {path:?} repeats a waypoint"
+            );
+        }
+        assert_eq!(path.last().copied(), Some(Vec3::new(0.3, 0.0, 0.0)));
+    }
+
+    #[test]
+    fn a_start_that_is_the_goal_is_a_path_of_one_waypoint() {
+        let p = Vec3::new(1.0, 2.0, 3.0);
+        assert_eq!(
+            plan(p, p, &[], open_workspace(), PlannerConfig::default(), 1),
+            Ok(vec![p])
+        );
+    }
+
+    #[test]
+    fn an_absurd_iteration_count_is_refused_instead_of_running_for_hours() {
+        let config = PlannerConfig {
+            max_iterations: u32::MAX,
+            ..PlannerConfig::default()
+        };
+        assert_eq!(
+            plan(
+                Vec3::new(0.0, 0.0, 0.0),
+                Vec3::new(5.0, 0.0, 0.0),
+                &[],
+                open_workspace(),
+                config,
+                1
+            ),
+            Err(PlanError::InvalidInput(
+                crate::semantics::InvalidScenarioReason::TooManyIterations
+            ))
+        );
+    }
+
+    #[test]
+    fn a_partial_config_takes_the_defaults_for_what_it_leaves_out() {
+        let config: PlannerConfig = serde_json::from_str(r#"{"robot_radius": 0.3}"#).unwrap();
+        assert_eq!(config.robot_radius, 0.3);
+        assert_eq!(
+            config.max_iterations,
+            PlannerConfig::default().max_iterations
+        );
+        assert_eq!(config.step_size, PlannerConfig::default().step_size);
+    }
+
+    #[test]
+    fn a_long_straight_corridor_with_a_full_goal_bias_finishes() {
+        // 400 m at a 1 cm step is 40,000 nodes along one axis: it overflowed the stack
+        let workspace = Workspace {
+            min: Vec3::new(-1.0, -1.0, -1.0),
+            max: Vec3::new(401.0, 1.0, 1.0),
+        };
+        let config = PlannerConfig {
+            step_size: 0.01,
+            goal_bias: 1.0,
+            goal_threshold: 0.01,
+            max_iterations: 100_000,
+            ..PlannerConfig::default()
+        };
+        let path = plan(
+            Vec3::new(0.0, 0.0, 0.0),
+            Vec3::new(400.0, 0.0, 0.0),
+            &[],
+            workspace,
+            config,
+            1,
+        )
+        .expect("a straight corridor has a path");
+        assert_eq!(path.last().copied(), Some(Vec3::new(400.0, 0.0, 0.0)));
     }
 }

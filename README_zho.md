@@ -10,13 +10,13 @@
 
 <p align="center">
   <img src="https://img.shields.io/badge/Licencia-GPL%203.0-blue.svg" alt="GPL 3.0">
-  <img src="https://img.shields.io/badge/Algorithm-RRT%20%2F%20Potential%20Fields-orange.svg" alt="Algorithms">
+  <img src="https://img.shields.io/badge/Algorithm-RRT-orange.svg" alt="Algorithms">
   <img src="https://img.shields.io/badge/Engine-Rust-blue.svg" alt="Engine">
 </p>
 
 ---
 
-**诚实核查——今天真正能跑起来的部分：** `src/rrt.rs` 中的单智能体 RRT 搜索（带有真实的、独立于 `max_iterations` 的挂钟时间截止 `max_duration_ms`）、`src/obstacle.rs` 的球体/线段碰撞数学、`src/geometry.rs` 的向量数学、`src/rng.rs` 的确定性 PRNG、`src/semantics.rs` 的场景校验关卡，以及 `src/validate.rs` 对已计算路径的安全性复检，都是真实且经过测试的（56 个测试，`cargo test`）——每一条返回的路径都在测试中被验证为真正无障碍，而不只是看起来合理。CLI（`run.sh scenarios/example.json`，加上 `validate` 子命令）今天确实可用。仍然只是设想的部分：这只是一个单线程的普通 RRT，不是 RRT*（代码中不存在任何优化重连步骤），也不是多机器人协调器——本 README 其他地方出现的"最多可同时为 32+ 台机器人"和"亚 50ms 的路径生成"描述的是未来目标，不是实测结果；本仓库中完全没有任何 C++ 代码（Cargo.toml 恰好只有两个依赖，`serde`/`serde_json`，没有任何并行/线程 crate），而且它目前是一个基于 JSON 场景文件的 CLI，还不是连接到 HYDRA-UMC-JOB-DISPATCHER 的网络服务，也没有对照一个真实运行中的 HYDRA-UMC-TWIN 做过验证。已交付的具体内容见 `CHANGELOG.md`，被刻意推迟的内容及原因的完整、诚实清单见 `mejoras_futuras.txt`。
+**诚实核查——今天真正能跑起来的部分：** `src/rrt.rs` 中的单智能体 RRT 搜索（带有真实的、独立于 `max_iterations` 的挂钟时间截止 `max_duration_ms`）、`src/obstacle.rs` 的球体/线段碰撞数学、`src/geometry.rs` 的向量数学、`src/rng.rs` 的确定性 PRNG、`src/semantics.rs` 的场景校验关卡，以及 `src/validate.rs` 对已计算路径的安全性复检，都是真实且经过测试的（66 个测试，`cargo test`）——每一条返回的路径都在测试中被验证为真正无障碍，而不只是看起来合理。CLI（`run.sh scenarios/example.json`，加上 `validate` 子命令）今天确实可用。仍然只是设想的部分：这只是一个单线程的普通 RRT，不是 RRT*（代码中不存在任何优化重连步骤），也不是多机器人协调器——本 README 其他地方出现的"最多可同时为 32+ 台机器人"和"亚 50ms 的路径生成"描述的是未来目标，不是实测结果；本仓库中完全没有任何 C++ 代码（Cargo.toml 恰好只有两个依赖，`serde`/`serde_json`，没有任何并行/线程 crate），而且它目前是一个基于 JSON 场景文件的 CLI，还不是连接到 HYDRA-UMC-JOB-DISPATCHER 的网络服务，也没有对照一个真实运行中的 HYDRA-UMC-TWIN 做过验证。已交付的具体内容见 `CHANGELOG.md`，被刻意推迟的内容及原因的完整、诚实清单见 `mejoras_futuras.txt`。
 
 ---
 
@@ -33,6 +33,7 @@
 * 🛡️ **针对变化障碍物的路径复检（今天真实）：** `validate` 子命令（`src/validate.rs`）在不重新搜索的情况下，将一条已计算出的路径对照场景当前的障碍物/工作空间重新检查。由新检测到的障碍物自动触发的实时重新规划尚未实现——目前它是调用者显式执行的一个独立命令。
 * ⚡ **确定性、受挂钟时间约束的搜索（今天真实）：** 一个真实的单线程 Rust 实现（本仓库中完全没有 C++），带有真实的 `PlannerConfig.max_duration_ms` 截止时间，独立于 `max_iterations`。这段代码中没有任何并行性，也没有任何实测的亚 50ms 基准——那类性能说法描述的是未来目标。
 * 🔄 **JSON 场景格式（今天真实）：** 一个场景就是一个普通的 JSON 文件（`start`/`goal`/`obstacles`/`workspace`/`config`，见下面的"构建与运行"）。本仓库中没有任何 G-Code 或 URDF 解析器——那是 HYDRA-UMC-TWIN 自己的事，不是这个规划器的。
+* 🧱 **对检查内容保持诚实（今天已实现）：** 工作空间是整个机身必须停留的体积，因此起点、目标、采样点和路径点必须与其墙面保持 `robot_radius` 的距离（比机器人更窄的工作空间会被拒绝）；`validate` 还要求路径从场景的 `start` 开始、在其 `goal` 结束（误差 1e-6 以内），所以来自其他位姿的缓存路径或单个路径点不再是“安全”的；`config` 可以只列出要改动的字段；`max_iterations` 上限为 10,000,000；最近邻树在增长时会被均衡重建并且无需递归遍历，因此很长的直线走廊不会使栈溢出；stdout 只输出 JSON 结果（标识行输出到 stderr）。
 
 ---
 
@@ -41,19 +42,21 @@
 ```mermaid
 flowchart TB
     GOAL["Swarm Goal / Mission"] --> PLAN["3D PATH-PLANNER"]
-    PLAN --> COLL["Collision Check (Octree)"]
+    PLAN --> COLL["Collision Check (球体)"]
     VIS["Vision Safety Zones"] --> COLL
     TWIN["Robot Constraints (URDF)"] --> COLL
-    COLL -- Clean --> OPT["Trajectory Optimizer (S-Curve)"]
-    OPT --> SYNC["SWARM-SYNC Dispatch"]
+    COLL -. Clean .-> OPT["Trajectory Optimizer (S-Curve)"]
+    OPT -.-> SYNC["SWARM-SYNC Dispatch"]
 ```
+
+> 虚线箭头仅为计划，尚未实现：规划器不读取占用数据或机器人约束，没有轨迹优化器，也不与 SWARM-SYNC 通信。它只在静态球体集合中为单个智能体规划路径。
 
 ---
 
 ## 3. 🧱 架构与设计决策
 
 * **为何 3D 无碰撞规划是独立的服务。** 在实时 3D 场景（单元内的每个机器人、工具和障碍物）上进行路径搜索，其对 CPU 的消耗和对延迟的敏感度与任务调度本身截然不同——将其隔离出来，意味着一次缓慢的规划查询永远不会阻塞 HYDRA-UMC-JOB-DISPATCHER 分配其他工作。
-* **为何在真实执行之前会先对照 HYDRA-UMC-TWIN 进行验证。** 一条规划好的路线会首先在数字孪生系统自身的物理仿真中接受检验——在其被发送到真实机械臂之前，捕获那些几何上有效但物理上不可达的路径（扭矩限制、奇异点）。
+* **与 HYDRA-UMC-TWIN 的验证是计划中的，尚未完成。** HYDRA-UMC-TWIN 目前只读取项目清单：它没有物理或仿真，因此在规划路径送往真实机械臂之前，没有任何东西检查扭矩极限或奇异点。`validate` 只检查障碍物、工作空间和路径的两端，仅此而已。
 * **为何搜索算法今天是一个普通的 RRT，而非 RRT* 或多机器人协调器。** `src/rrt.rs` 实现了一个真实、经过测试的 Rapidly-exploring Random Tree 搜索——单一代理、静态障碍物集合、真正无碰撞的结果（每条返回的路径都在测试中验证为真实无障碍物，而不仅仅是看起来合理）。RRT*（一个提升最优性的重连环节）和真正的多机器人同步规划（本 README 中描述的“同时最多 32+ 台机器人”）是真实、故意留待后续的工作：先证明单一代理搜索的正确性，而不是一次性构建三者并一起调试。
 * **为何障碍物是球体，而非任意网格的八叉树。** 球体是最简单且仍然真实、在几何上正确的 3D 碰撞基本图形——而非用包围盒来代替更详细的形状。只有当场景中的碰撞体够多、到使得暴力检测成为瓶颈时，八叉树/BVH 才开始变得重要——今天的集群单元（少量机器臂和静态安全区）还远未达到那个规模。
 * **为何这个项目今天是在 JSON 场景文件上运行的 CLI，而非网络服务。** 在 HTTP 和生态系统共享的 gRPC 契约（`hydra.common.v1`，见 `HYDRA-UMC-ORCHESTRATOR/proto/`）之间选择，是一个真实的协议决策，值得在 HYDRA-UMC-JOB-DISPATCHER 真正准备调用该服务时再单独处理。这个 CLI 今天已经真正可用（`run.bat scenarios/example.json`），只是还未接入网络。
@@ -74,6 +77,8 @@ HYDRA-UMC-PATH-PLANNER-3D/
 │   ├── rng.rs        # 无依赖的确定性 PRNG（xorshift64*）
 │   ├── rrt.rs        # 真正的规划器：RRT 搜索、Workspace、PlannerConfig
 │   ├── validate.rs   # 对已计算路径的真实安全性复核
+│   ├── kdtree.rs     # 用于最近邻查找的增量 KD 树（增长时均衡重建）
+│   ├── shrink.rs     # 将使规划器无法通过自身验证器的场景最小化
 │   ├── semantics.rs  # 共享语义门：在任何几何检查之前拒绝无效场景
 │   └── corpus.rs     # 仅用于测试：rrt.rs 和 validate.rs 自身测试共享的
 │                        可复用障碍物/工作空间场景集
@@ -145,7 +150,7 @@ run.bat scenarios/example.json
 ```bash
 cargo test   # 几何学 + 障碍物碰撞数学、PRNG、RRT 规划器本身
              #（包括其真实的时钟时间限制），以及 validate.rs 的
-             # 安全性复核——共 56 个测试
+             # 安全性复核——共 66 个测试
 ```
 
 ---

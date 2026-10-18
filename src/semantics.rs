@@ -28,8 +28,12 @@ use serde::Serialize;
 pub enum InvalidScenarioReason {
     NonFiniteRobotRadius,
     NegativeRobotRadius,
-    NonFiniteObstacle { index: usize },
-    NegativeObstacleRadius { index: usize },
+    NonFiniteObstacle {
+        index: usize,
+    },
+    NegativeObstacleRadius {
+        index: usize,
+    },
     NonFiniteWorkspaceBound,
     InvertedWorkspaceBound,
     NonFinitePoint,
@@ -40,7 +44,18 @@ pub enum InvalidScenarioReason {
     NonFiniteGoalThreshold,
     NegativeGoalThreshold,
     ZeroMaxIterations,
+    /// more iterations than the planner will run in one call: one tree node
+    /// and one KD-tree node are allocated per iteration
+    TooManyIterations,
+    /// the workspace is narrower than the robot on some axis, so no centre
+    /// of the robot can keep its whole body inside it
+    WorkspaceNarrowerThanRobot,
 }
+
+/// The most iterations (and so tree nodes) one `plan()` call accepts. A
+/// scenario asking for billions would otherwise run for hours while the tree
+/// grows without bound.
+pub const MAX_ITERATIONS_LIMIT: u32 = 10_000_000;
 
 /// Validates a bare robot/clearance radius on its own - the exact value
 /// `Obstacle::contains_point`/`intersects_segment` add onto an
@@ -131,6 +146,24 @@ pub fn validate_planner_config(config: &PlannerConfig) -> Result<(), InvalidScen
     }
     if config.max_iterations == 0 {
         return Err(InvalidScenarioReason::ZeroMaxIterations);
+    }
+    if config.max_iterations > MAX_ITERATIONS_LIMIT {
+        return Err(InvalidScenarioReason::TooManyIterations);
+    }
+    Ok(())
+}
+
+/// A robot whose body is wider than the workspace cannot fit in it at all.
+pub fn validate_workspace_fits_robot(
+    workspace: &Workspace,
+    robot_radius: f64,
+) -> Result<(), InvalidScenarioReason> {
+    let r2 = 2.0 * robot_radius;
+    if workspace.max.x - workspace.min.x < r2
+        || workspace.max.y - workspace.min.y < r2
+        || workspace.max.z - workspace.min.z < r2
+    {
+        return Err(InvalidScenarioReason::WorkspaceNarrowerThanRobot);
     }
     Ok(())
 }

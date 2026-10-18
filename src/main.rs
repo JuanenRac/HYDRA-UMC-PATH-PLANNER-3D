@@ -38,7 +38,7 @@ use shrink::{planner_output_is_unsafe, shrink_scenario};
 use std::env;
 use std::fs;
 use std::process::ExitCode;
-use validate::{validate_path, PathSafetyIssue};
+use validate::{check_endpoints, validate_path, PathSafetyIssue};
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 
@@ -177,12 +177,13 @@ fn run_validate(scenario_path: &str, path_path: &str) -> ExitCode {
         }
     };
     let robot_radius = scenario.config.unwrap_or_default().robot_radius;
-    let issues = validate_path(
+    let mut issues = validate_path(
         &path,
         &scenario.obstacles,
         &scenario.workspace,
         robot_radius,
     );
+    issues.extend(check_endpoints(&path, scenario.start, scenario.goal));
     let is_safe = issues.is_empty();
     let outcome = if is_safe {
         ValidateOutcome::Safe { frame }
@@ -293,8 +294,11 @@ fn run_shrink(scenario_path: &str, out_path: Option<&str>) -> ExitCode {
 }
 
 fn main() -> ExitCode {
-    println!("HYDRA-UMC-PATH-PLANNER-3D v{VERSION}");
-    println!("Multi-robot 3D path optimizer: computes collision-free, RRT trajectories for the swarm sharing one workspace.");
+    // The identity lines go to stderr: stdout carries the JSON result only,
+    // so `planner scenario.json | jq` and a caller that reads the output
+    // need not strip anything.
+    eprintln!("HYDRA-UMC-PATH-PLANNER-3D v{VERSION}");
+    eprintln!("Path planner: computes collision-free RRT paths for one agent through a static obstacle set.");
 
     let args: Vec<String> = env::args().collect();
 

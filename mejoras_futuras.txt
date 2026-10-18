@@ -8,7 +8,7 @@ in src/rrt.rs. The README, CHANGELOG.md, docs/CLI_REFERENCE.md and the
 module-level comments in src/main.rs, src/rrt.rs and src/obstacle.rs
 each state their own short version of the relevant reason directly
 inline, so none of them depend on this file to make sense on their own
-- this is the one place all four items are written up in full.
+- this is the one place the items are written up in full.
 
 1. RRT* (path optimality via a rewiring pass)
    -----------------------------------------
@@ -39,14 +39,14 @@ inline, so none of them depend on this file to make sense on their own
    colliders. An octree/BVH is real future work once a scene exists
    with enough obstacles for brute-force checking to actually matter.
 
-4. KD-tree nearest-neighbor lookup
-   --------------------------------
-   src/rrt.rs finds each new tree node's nearest neighbor with a linear
-   scan over the tree, not a KD-tree. Fine at the tree sizes a single
-   planning call produces today (hundreds to a few thousand nodes), and
-   simpler to verify correct than a KD-tree would have been for this
-   first pass. Worth revisiting once tree sizes grow enough for the
-   linear scan to dominate planning time.
+4. A KD-tree that is rebuilt only by doubling
+   -------------------------------------------
+   Nearest-neighbour lookup uses src/kdtree.rs, a real incremental KD-tree.
+   It is rebuilt balanced each time it doubles in size and both insert and
+   search are iterative, so a monotonic insertion order (a long straight
+   corridor) can neither overflow the stack nor degrade it to a list.
+   What is not there: a library tree (e.g. kiddo) and a hard cap on nodes
+   other than the iteration limit (semantics::MAX_ITERATIONS_LIMIT).
 
 5. Exposing this as a network service (HTTP or hydra.common.v1 gRPC)
    -------------------------------------------------------------------

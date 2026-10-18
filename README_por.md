@@ -10,13 +10,13 @@
 
 <p align="center">
   <img src="https://img.shields.io/badge/License-GPL%203.0-blue.svg" alt="GPL 3.0">
-  <img src="https://img.shields.io/badge/Algorithm-RRT%20%2F%20Potential%20Fields-orange.svg" alt="Algorithms">
+  <img src="https://img.shields.io/badge/Algorithm-RRT-orange.svg" alt="Algorithms">
   <img src="https://img.shields.io/badge/Engine-Rust-blue.svg" alt="Engine">
 </p>
 
 ---
 
-**Verificação de honestidade - o que realmente funciona hoje:** a pesquisa RRT de um só agente do `src/rrt.rs` (com o seu limite real de tempo de relógio de parede `max_duration_ms`, independente de `max_iterations`), a matemática de colisão esfera/segmento do `src/obstacle.rs`, a matemática vetorial do `src/geometry.rs`, o PRNG determinista do `src/rng.rs`, a porta de validação de cenários do `src/semantics.rs`, a nova verificação de segurança de um caminho já calculado do `src/validate.rs` e a minimização real de casos do `src/shrink.rs` para um cenário que falha (apaga obstáculos e depois aperta o espaço de trabalho/o orçamento de iterações, voltando a verificar exatamente o mesmo predicado de falha após cada redução experimental, nunca um cenário que apenas parece mais pequeno enquanto testa outra coisa) são reais e testados (56 testes, `cargo test`) - cada caminho devolvido é verificado como livre de obstáculos nos testes, e não apenas com ar plausível. A CLI (`run.sh scenarios/example.json`, mais os subcomandos `validate` e `shrink`) é genuinamente utilizável hoje. O que continua a ser aspiracional: isto é um RRT simples de uma só thread, não um RRT* (não existe no código nenhuma passagem de religação para otimalidade) nem um coordenador multirrobô - a linguagem de «até 32+ robôs em simultâneo» e «geração de caminhos em menos de 50 ms» noutros pontos deste README descreve um alvo futuro, não um resultado medido; não há C++ em lado nenhum deste repositório (o Cargo.toml tem exatamente duas dependências, `serde`/`serde_json`, nenhum crate de threads/paralelismo), e é uma CLI sobre um ficheiro de cenário JSON, ainda não um serviço de rede ligado ao HYDRA-UMC-JOB-DISPATCHER nem validado contra um HYDRA-UMC-TWIN em direto. Consulte o `CHANGELOG.md` para saber exatamente o que já foi entregue e o `mejoras_futuras.txt` para a lista completa e honesta do que foi deliberadamente adiado e porquê.
+**Verificação de honestidade - o que realmente funciona hoje:** a pesquisa RRT de um só agente do `src/rrt.rs` (com o seu limite real de tempo de relógio de parede `max_duration_ms`, independente de `max_iterations`), a matemática de colisão esfera/segmento do `src/obstacle.rs`, a matemática vetorial do `src/geometry.rs`, o PRNG determinista do `src/rng.rs`, a porta de validação de cenários do `src/semantics.rs`, a nova verificação de segurança de um caminho já calculado do `src/validate.rs` e a minimização real de casos do `src/shrink.rs` para um cenário que falha (apaga obstáculos e depois aperta o espaço de trabalho/o orçamento de iterações, voltando a verificar exatamente o mesmo predicado de falha após cada redução experimental, nunca um cenário que apenas parece mais pequeno enquanto testa outra coisa) são reais e testados (66 testes, `cargo test`) - cada caminho devolvido é verificado como livre de obstáculos nos testes, e não apenas com ar plausível. A CLI (`run.sh scenarios/example.json`, mais os subcomandos `validate` e `shrink`) é genuinamente utilizável hoje. O que continua a ser aspiracional: isto é um RRT simples de uma só thread, não um RRT* (não existe no código nenhuma passagem de religação para otimalidade) nem um coordenador multirrobô - a linguagem de «até 32+ robôs em simultâneo» e «geração de caminhos em menos de 50 ms» noutros pontos deste README descreve um alvo futuro, não um resultado medido; não há C++ em lado nenhum deste repositório (o Cargo.toml tem exatamente duas dependências, `serde`/`serde_json`, nenhum crate de threads/paralelismo), e é uma CLI sobre um ficheiro de cenário JSON, ainda não um serviço de rede ligado ao HYDRA-UMC-JOB-DISPATCHER nem validado contra um HYDRA-UMC-TWIN em direto. Consulte o `CHANGELOG.md` para saber exatamente o que já foi entregue e o `mejoras_futuras.txt` para a lista completa e honesta do que foi deliberadamente adiado e porquê.
 
 ---
 
@@ -31,6 +31,7 @@ Integra os dados de ocupação em tempo real dos Vision Nodes e as restrições 
 * 🛡️ **Revalidação de um caminho face a obstáculos alterados (real hoje):** o subcomando `validate` (`src/validate.rs`) volta a verificar um caminho já calculado contra os obstáculos/espaço de trabalho atuais de um cenário, sem uma nova pesquisa. O replaneamento automático em tempo real, desencadeado por obstáculos recém-detetados, ainda não está implementado - hoje é um comando explícito e separado que um chamador executa.
 * ⚡ **Pesquisa determinista e limitada pelo relógio de parede (real hoje):** uma implementação Rust pura de uma só thread (sem C++ em lado nenhum deste repositório) com um limite real `PlannerConfig.max_duration_ms`, independente de `max_iterations`. Não há paralelismo nem um benchmark medido abaixo de 50 ms neste código - afirmações de desempenho desse tipo descrevem um alvo futuro.
 * 🔄 **Formato de cenário JSON (real hoje):** um cenário é um ficheiro JSON simples (`start`/`goal`/`obstacles`/`workspace`/`config`, ver COMPILAÇÃO E EXECUÇÃO abaixo). Não há nenhum analisador de G-Code nem de URDF neste repositório - isso é preocupação do próprio HYDRA-UMC-TWIN, não deste planeador.
+* 🧱 **Honesto sobre o que verifica (real hoje):** o espaço de trabalho é o volume em que todo o corpo tem de ficar, pelo que partida, objetivo, amostras e pontos de passagem têm de manter `robot_radius` de distância às suas paredes (um espaço mais estreito do que o robô é recusado); o `validate` exige ainda que o caminho comece no `start` do cenário e acabe no seu `goal` (a 1e-6), pelo que um caminho em cache de outra pose, ou um único ponto de passagem, já não é "seguro"; o `config` pode listar só os campos que altera; `max_iterations` está limitado a 10 000 000; a árvore do vizinho mais próximo é reconstruída equilibrada à medida que cresce e percorrida sem recursão, pelo que um corredor longo e reto não pode estourar a pilha; o stdout leva só o resultado JSON (as linhas de identidade vão para o stderr).
 
 ---
 
@@ -39,19 +40,21 @@ Integra os dados de ocupação em tempo real dos Vision Nodes e as restrições 
 ```mermaid
 flowchart TB
     GOAL["Swarm Goal / Mission"] --> PLAN["3D PATH-PLANNER"]
-    PLAN --> COLL["Collision Check (Octree)"]
+    PLAN --> COLL["Collision Check (esferas)"]
     VIS["Vision Safety Zones"] --> COLL
     TWIN["Robot Constraints (URDF)"] --> COLL
-    COLL -- Clean --> OPT["Trajectory Optimizer (S-Curve)"]
-    OPT --> SYNC["SWARM-SYNC Dispatch"]
+    COLL -. Clean .-> OPT["Trajectory Optimizer (S-Curve)"]
+    OPT -.-> SYNC["SWARM-SYNC Dispatch"]
 ```
+
+> As setas a tracejado estão planeadas, não implementadas: o planeador não lê dados de ocupação nem restrições do robô, não tem otimizador de trajetórias e não fala com o SWARM-SYNC. Planeia um agente através de um conjunto estático de esferas.
 
 ---
 
 ## 3. 🧱 ARQUITETURA E DECISÕES DE DESIGN
 
 * **Porque é que o planeamento 3D sem colisões é um serviço à parte.** A pesquisa de caminhos sobre uma cena 3D em direto (cada robô, ferramenta e obstáculo da célula) consome muito CPU e é sensível à latência de uma forma diferente do próprio escalonamento de trabalhos - isolá-la significa que uma consulta de planeamento lenta nunca impede o HYDRA-UMC-JOB-DISPATCHER de atribuir outro trabalho.
-* **Porque é que valida contra o HYDRA-UMC-TWIN antes da execução real.** Uma rota planeada é verificada primeiro na simulação física do próprio gémeo digital - apanhando um caminho geometricamente válido mas fisicamente inalcançável (limites de binário, singularidades) antes de alguma vez ser enviado a um braço real.
+* **A validação com o HYDRA-UMC-TWIN está planeada, não feita.** O HYDRA-UMC-TWIN hoje só lê manifestos de projeto: não tem física nem simulação, pelo que nada verifica uma rota planeada quanto a limites de binário ou singularidades antes de ir para um braço real. O `validate` verifica obstáculos, o espaço de trabalho e as duas pontas do caminho, nada mais.
 * **Porque é que a pesquisa é hoje um RRT simples e não um RRT\* nem um coordenador multirrobô.** O `src/rrt.rs` implementa uma pesquisa real e testada de Rapidly-exploring Random Tree - um só agente, um conjunto estático de obstáculos, um resultado genuinamente sem colisões (cada caminho devolvido é verificado como livre de obstáculos nos testes, e não apenas com ar plausível). O RRT\* (uma passagem de religação que melhora a otimalidade) e o verdadeiro planeamento multirrobô sincronizado («até 32+ robôs em simultâneo» deste README) são trabalho futuro real e delimitado: provar primeiro que a pesquisa de um agente está correta, em vez de construir os três de uma vez e depurá-los em conjunto.
 * **Porque é que os obstáculos são esferas e não uma octree de malhas arbitrárias.** Uma esfera é a primitiva de colisão 3D mais simples que continua a ser real e geometricamente correta - não é um substituto de caixa delimitadora para algo mais detalhado. Uma octree/BVH só começa a importar quando uma cena tem colisores suficientes para que a verificação por força bruta seja o gargalo; a célula de enxame de hoje (um punhado de braços e zonas de segurança estáticas) não tem.
 * **Porque é que hoje é uma CLI sobre um ficheiro de cenário JSON e não um serviço de rede.** Escolher HTTP ou o contrato gRPC partilhado do ecossistema (`hydra.common.v1`, ver `HYDRA-UMC-ORCHESTRATOR/proto/`) é uma decisão de protocolo real que merece a sua própria passagem quando o HYDRA-UMC-JOB-DISPATCHER estiver de facto pronto para chamar este serviço. A CLI continua a ser genuinamente utilizável hoje (`run.bat scenarios/example.json`), só que ainda não está ligada à rede.
@@ -72,6 +75,8 @@ HYDRA-UMC-PATH-PLANNER-3D/
 │   ├── rng.rs        # PRNG determinista sem dependências (xorshift64*)
 │   ├── rrt.rs        # O planeador real: pesquisa RRT, Workspace, PlannerConfig
 │   ├── validate.rs   # Nova verificação de segurança real de um caminho já calculado
+│   ├── kdtree.rs     # KD-tree incremental (equilibrada ao crescer) para o vizinho mais próximo
+│   ├── shrink.rs     # Reduz um cenário que faz o planeador falhar no seu próprio validador
 │   ├── semantics.rs  # Porta semântica partilhada: rejeita um cenário inválido antes de qualquer verificação geométrica
 │   └── corpus.rs     # Só para testes: fixtures reutilizáveis de cenários de obstáculos/espaço de trabalho
 │                        partilhadas pelos testes do rrt.rs e do validate.rs
@@ -128,7 +133,7 @@ cargo test   # matemática de geometria + colisão de obstáculos, o PRNG, o
              # planeador RRT (incluindo o seu limite real de tempo de relógio
              # de parede), a nova verificação de segurança do próprio
              # validate.rs e a minimização real de cenários que falham do
-             # shrink.rs - 56 testes no total
+             # shrink.rs - 66 testes no total
 ```
 
 ---

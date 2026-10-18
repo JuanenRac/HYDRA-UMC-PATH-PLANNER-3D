@@ -18,6 +18,17 @@ semantic-versioning judgment calls:
 
 ---
 
+## [0.0.8] - The whole body stays inside the workspace, a path must reach the goal, and a long corridor no longer aborts
+
+- **The workspace is the volume the whole body must stay in.** `robot_radius` only inflated the obstacles, so a centre touching a wall counted as inside. Start, goal, samples and waypoints must now keep `robot_radius` clear of the workspace walls (`plan` answers outside-workspace, `validate` reports the waypoint), and a workspace narrower than the robot is refused.
+- **`validate` checks both ends of the path.** A path that does not begin at the scenario's `start` or end at its `goal` (within 1e-6) is reported as `PathDoesNotStartAtStart` / `PathDoesNotReachGoal`, so a cached path from another pose, or a single waypoint, is no longer `safe` while the jump from the robot's real pose to its first waypoint was never checked.
+- **A long straight corridor no longer aborts the process.** The nearest-neighbour tree degenerated into a linked list when points arrived in a monotonic order (a goal bias of 1, a straight corridor) and its recursion overflowed the stack at around 40,000 nodes. It is now stored in one vector, inserted into and searched with loops and an explicit stack, and rebuilt balanced each time it doubles; answers are identical, ties included.
+- **`max_iterations` is capped at 10,000,000** (`TooManyIterations`) instead of running for hours while the tree grows without bound.
+- **Stdout is only the JSON result.** The identity lines go to stderr, so `planner scenario.json | jq` works and a caller need not strip lines.
+- **A partial `config` works:** `{"robot_radius": 0.3}` takes the defaults for the rest, as the README always said.
+- **No repeated final waypoint:** a goal-biased sample that landed on the goal no longer ends the path with a segment of length 0. A start equal to the goal is a path of one waypoint.
+- Documentation: the package description, the badge and the diagram no longer present RRT*, potential fields, an octree, a trajectory optimiser or SWARM-SYNC dispatch as what the planner does; the README says HYDRA-UMC-TWIN does not validate routes; the directory listing has `kdtree.rs` and `shrink.rs`; `docs/CLI_REFERENCE.md` is current; the manifest `build` command has no stray dot; a comment in `bump_version.py` had the wrong example. 66 tests.
+
 ## [0.0.7] - Frame label
 
 - A scenario may declare an optional frame name (at most 64 bytes); it is echoed in the plan and validation result and never changes a coordinate. An empty or over-long name is refused.

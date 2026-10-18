@@ -46,6 +46,17 @@ pub enum PathSafetyIssue {
         from_index: usize,
         to_index: usize,
     },
+    /// The first waypoint is not where the robot is: the jump from the
+    /// robot's real pose to the path is the one segment nothing checked.
+    PathDoesNotStartAtStart {
+        start: Vec3,
+        first: Vec3,
+    },
+    /// The last waypoint is not the goal the path was asked to reach.
+    PathDoesNotReachGoal {
+        goal: Vec3,
+        last: Vec3,
+    },
     /// the scenario's own numeric inputs (robot_radius, obstacle
     /// geometry, workspace bounds) are not physically valid - checked
     /// BEFORE any geometry test below runs, so a negative robot_radius
@@ -97,7 +108,8 @@ pub fn validate_path(
             // for NaN/infinity and might conceal the actual cause.
             continue;
         }
-        if !workspace.contains(point) {
+        // the whole body, not only its centre, must stay inside the workspace
+        if !workspace.contains_with_margin(point, robot_radius) {
             issues.push(PathSafetyIssue::WaypointOutsideWorkspace { index, point });
         }
         if obstacles
@@ -140,6 +152,31 @@ pub fn is_path_safe(
     robot_radius: f64,
 ) -> bool {
     validate_path(path, obstacles, workspace, robot_radius).is_empty()
+}
+
+/// How far (in the scenario's own length unit) a path's ends may be from the
+/// scenario's start and goal and still count as being there.
+pub const ENDPOINT_TOLERANCE: f64 = 1e-6;
+
+/// Does the path begin where the robot is and end at the goal? A path cached
+/// from another start or another goal, or a single waypoint that is neither,
+/// would otherwise be "safe" while the jump from the real pose to its first
+/// waypoint was never checked.
+pub fn check_endpoints(path: &[Vec3], start: Vec3, goal: Vec3) -> Vec<PathSafetyIssue> {
+    let mut issues = Vec::new();
+    let (Some(&first), Some(&last)) = (path.first(), path.last()) else {
+        return issues; // an empty path is reported by validate_path
+    };
+    if !first.is_finite() || !last.is_finite() {
+        return issues; // reported as a non-finite waypoint
+    }
+    if first.distance(start) > ENDPOINT_TOLERANCE {
+        issues.push(PathSafetyIssue::PathDoesNotStartAtStart { start, first });
+    }
+    if last.distance(goal) > ENDPOINT_TOLERANCE {
+        issues.push(PathSafetyIssue::PathDoesNotReachGoal { goal, last });
+    }
+    issues
 }
 
 #[cfg(test)]

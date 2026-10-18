@@ -20,13 +20,15 @@ present, else `target/release/hydra-umc-path-planner-3d`) and forwards all
 arguments unchanged. The examples below invoke the release binary directly,
 which is equivalent.
 
-Every invocation — including bare, no-argument invocation — first prints
-identity/version and role, then the command's own output:
+Every invocation — including bare, no-argument invocation — prints
+identity/version and role to **stderr**; **stdout** carries only the command's
+own output, so `planner scenario.json | jq` works. In a terminal both appear,
+in this order:
 
 ```
 $ hydra-umc-path-planner-3d
-HYDRA-UMC-PATH-PLANNER-3D v0.0.5
-Multi-robot 3D path optimizer: computes collision-free, RRT trajectories for the swarm sharing one workspace.
+HYDRA-UMC-PATH-PLANNER-3D v0.0.8
+Path planner: computes collision-free RRT paths for one agent through a static obstacle set.
 Usage: hydra-umc-path-planner-3d <scenario.json>
        hydra-umc-path-planner-3d validate <scenario.json> <path.json>
        hydra-umc-path-planner-3d shrink <scenario.json> [--out <minimal.json>]
@@ -67,8 +69,8 @@ sides of a workspace, with three spherical obstacles in the way:
 
 ```
 $ hydra-umc-path-planner-3d scenarios/example.json
-HYDRA-UMC-PATH-PLANNER-3D v0.0.5
-Multi-robot 3D path optimizer: computes collision-free, RRT trajectories for the swarm sharing one workspace.
+HYDRA-UMC-PATH-PLANNER-3D v0.0.8
+Path planner: computes collision-free RRT paths for one agent through a static obstacle set.
 {
   "status": "ok",
   "path": [
@@ -110,8 +112,8 @@ not a generic "no path found" (exit `1`):
 
 ```
 $ hydra-umc-path-planner-3d scenario-with-start-inside-obstacle.json
-HYDRA-UMC-PATH-PLANNER-3D v0.0.5
-Multi-robot 3D path optimizer: computes collision-free, RRT trajectories for the swarm sharing one workspace.
+HYDRA-UMC-PATH-PLANNER-3D v0.0.8
+Path planner: computes collision-free RRT paths for one agent through a static obstacle set.
 {
   "status": "error",
   "reason": "start_inside_obstacle"
@@ -128,8 +130,8 @@ Spanish; exit `1`):
 
 ```
 $ hydra-umc-path-planner-3d scenarios/does-not-exist.json
-HYDRA-UMC-PATH-PLANNER-3D v0.0.5
-Multi-robot 3D path optimizer: computes collision-free, RRT trajectories for the swarm sharing one workspace.
+HYDRA-UMC-PATH-PLANNER-3D v0.0.8
+Path planner: computes collision-free RRT paths for one agent through a static obstacle set.
 [path-planner-3d] could not read scenarios/does-not-exist.json: El sistema no puede encontrar el archivo especificado. (os error 2)
 ```
 
@@ -138,8 +140,8 @@ Multi-robot 3D path optimizer: computes collision-free, RRT trajectories for the
 ```
 $ echo '{not valid json' > malformed.json
 $ hydra-umc-path-planner-3d malformed.json
-HYDRA-UMC-PATH-PLANNER-3D v0.0.5
-Multi-robot 3D path optimizer: computes collision-free, RRT trajectories for the swarm sharing one workspace.
+HYDRA-UMC-PATH-PLANNER-3D v0.0.8
+Path planner: computes collision-free RRT paths for one agent through a static obstacle set.
 [path-planner-3d] could not parse malformed.json: key must be a string at line 1 column 2
 ```
 
@@ -156,8 +158,8 @@ above for `scenarios/example.json`, re-validated against the same scenario:
 
 ```
 $ hydra-umc-path-planner-3d validate scenarios/example.json real_path.json
-HYDRA-UMC-PATH-PLANNER-3D v0.0.5
-Multi-robot 3D path optimizer: computes collision-free, RRT trajectories for the swarm sharing one workspace.
+HYDRA-UMC-PATH-PLANNER-3D v0.0.8
+Path planner: computes collision-free RRT paths for one agent through a static obstacle set.
 {
   "status": "safe"
 }
@@ -176,8 +178,8 @@ check `validate.rs` exists specifically to catch):
 
 ```
 $ hydra-umc-path-planner-3d validate scenarios/example.json unsafe_path.json
-HYDRA-UMC-PATH-PLANNER-3D v0.0.5
-Multi-robot 3D path optimizer: computes collision-free, RRT trajectories for the swarm sharing one workspace.
+HYDRA-UMC-PATH-PLANNER-3D v0.0.8
+Path planner: computes collision-free RRT paths for one agent through a static obstacle set.
 {
   "status": "unsafe",
   "issues": [
@@ -197,8 +199,8 @@ Exits `1`.
 
 ```
 $ hydra-umc-path-planner-3d validate scenarios/example.json
-HYDRA-UMC-PATH-PLANNER-3D v0.0.5
-Multi-robot 3D path optimizer: computes collision-free, RRT trajectories for the swarm sharing one workspace.
+HYDRA-UMC-PATH-PLANNER-3D v0.0.8
+Path planner: computes collision-free RRT paths for one agent through a static obstacle set.
 Usage: hydra-umc-path-planner-3d validate <scenario.json> <path.json>
 <path.json> is a bare JSON array of {"x":.., "y":.., "z":..} waypoints.
 ```
@@ -222,8 +224,8 @@ violated this invariant, reported honestly rather than fabricating a
 
 ```
 $ hydra-umc-path-planner-3d shrink scenarios/example.json
-HYDRA-UMC-PATH-PLANNER-3D v0.0.5
-Multi-robot 3D path optimizer: computes collision-free, RRT trajectories for the swarm sharing one workspace.
+HYDRA-UMC-PATH-PLANNER-3D v0.0.8
+Path planner: computes collision-free RRT paths for one agent through a static obstacle set.
 {
   "status": "no_failure"
 }

@@ -10,7 +10,7 @@
 
 <p align="center">
   <img src="https://img.shields.io/badge/Licencia-GPL%203.0-blue.svg" alt="GPL 3.0">
-  <img src="https://img.shields.io/badge/Algorithm-RRT%20%2F%20Potential%20Fields-orange.svg" alt="Algorithms">
+  <img src="https://img.shields.io/badge/Algorithm-RRT-orange.svg" alt="Algorithms">
   <img src="https://img.shields.io/badge/Engine-Rust-blue.svg" alt="Engine">
 </p>
 
@@ -36,6 +36,7 @@
 * 🛡️ **変化した障害物に対する経路の再検証（今日実際に動く）：** `validate` サブコマンド（`src/validate.rs`）は、新たな探索を行わずに、既に計算済みの経路をシナリオの現在の障害物/ワークスペースに対して再チェックします。新たに検知された障害物によって自動的にトリガーされるリアルタイム再計画はまだ実装されていません - 現時点では、呼び出し側が実行する明示的で独立したコマンドです。
 * ⚡ **決定論的で壁時計により制限された探索（今日実際に動く）：** 本物のシングルスレッドRust実装であり（このリポジトリのどこにもC++は存在しません）、`max_iterations` とは独立した本物の `PlannerConfig.max_duration_ms` 期限を持ちます。このコードには並列処理も、サブ50msの実測ベンチマークも存在しません - その種のパフォーマンスに関する主張は将来の目標を述べたものです。
 * 🔄 **JSONシナリオ形式（今日実際に動く）：** シナリオは単純なJSONファイルです（`start`/`goal`/`obstacles`/`workspace`/`config`、詳細は下記のBUILD & RUN GUIDEを参照）。このリポジトリにはG-CodeやURDFのパーサーは存在しません - それらはこのプランナーではなく、HYDRA-UMC-TWIN自身の担当領域です。
+* 🧱 **何を検査するかに誠実（現在実装済み）：** ワークスペースは体全体が収まるべき体積なので、始点・目標・サンプル・経由点は壁から `robot_radius` 以上離れていなければなりません（ロボットより狭いワークスペースは拒否されます）。`validate` は経路がシナリオの `start` で始まり `goal` で終わること（1e-6 以内）も要求するため、別の姿勢からのキャッシュ済み経路や単一の経由点はもう「安全」ではありません。`config` は変更するフィールドだけを書けます。`max_iterations` は 10,000,000 が上限です。最近傍ツリーは成長に合わせてバランス良く再構築され、再帰なしで走査されるため、長い直線通路でもスタックはあふれません。stdout には JSON 結果だけが出力されます（識別行は stderr へ）。
 
 ---
 
@@ -44,19 +45,21 @@
 ```mermaid
 flowchart TB
     GOAL["Swarm Goal / Mission"] --> PLAN["3D PATH-PLANNER"]
-    PLAN --> COLL["Collision Check (Octree)"]
+    PLAN --> COLL["Collision Check (球)"]
     VIS["Vision Safety Zones"] --> COLL
     TWIN["Robot Constraints (URDF)"] --> COLL
-    COLL -- Clean --> OPT["Trajectory Optimizer (S-Curve)"]
-    OPT --> SYNC["SWARM-SYNC Dispatch"]
+    COLL -. Clean .-> OPT["Trajectory Optimizer (S-Curve)"]
+    OPT -.-> SYNC["SWARM-SYNC Dispatch"]
 ```
+
+> 点線の矢印は計画中で、未実装です。プランナーは占有データもロボットの制約も読まず、軌道オプティマイザーを持たず、SWARM-SYNC とも通信しません。静的な球の集合の中で 1 つのエージェントを計画するだけです。
 
 ---
 
 ## 3. 🧱 アーキテクチャと設計上の決定
 
 * **3D の衝突のないプランニングが独自のサービスである理由。** ライブの 3D シーン（セル内のすべてのロボット、工具、障害物）に対するパス探索は、ジョブスケジューリング自体とは異なる形で CPU 負荷が高く遅延に敏感です——これを分離することで、遅いプランニングクエリが HYDRA-UMC-JOB-DISPATCHER による他の作業の割当てをブロックすることは決してありません。
-* **実際の実行の前に HYDRA-UMC-TWIN に対して検証する理由。** 計画されたルートは、まずデジタルツイン自身の物理シミュレーションでチェックされます——幾何学的には有効だが物理的には到達不可能なパス（トルク制限、特異点）を、実際のアームに送信される前に捕捉します。
+* **HYDRA-UMC-TWIN での検証は計画中で、まだ行われていません。** HYDRA-UMC-TWIN は現在プロジェクトのマニフェストを読むだけで、物理もシミュレーションも持たないため、計画された経路が実機のアームに渡る前にトルク限界や特異点を確認するものはありません。`validate` が確認するのは障害物、ワークスペース、経路の両端だけです。
 * **探索が今日は単純な RRT であり、RRT* でもマルチロボットコーディネーターでもない理由。** `src/rrt.rs` は実際の、テスト済みの Rapidly-exploring Random Tree 探索を実装しています——単一エージェント、静的障害物集合、本当に衝突のない結果（返されるすべてのパスは、単にもっともらしく見えるだけではなく、テストで実際に障害物がないことが検証されています）。RRT*（最適性を向上させる再接続パス）と、本当の同期されたマルチロボットプランニング（この README の「最大 32+ ロボットを同時に」）は、実際の、意図的に範囲外とした将来の作業です——単一エージェントの探索を正しいと証明することを、3つを同時に構築して一緒にデバッグするよりも先に行いました。
 * **障害物が任意のメッシュのオクツリーではなく球体である理由。** 球体は、本当で幾何学的に正しい最も単純な 3D 衝突プリミティブです——より詳細な何かの代わりのバウンディングボックスではありません。オクツリー/BVH が重要になるのは、シーン内の衝突体が十分に多くなり、総総當たり的なチェックがボトルネックになった時だけです——今日のスワームセル（一採りのアームと静的な安全ゾーン）はそこまでには至っていません。
 * **これが今日はネットワークサービスではなく JSON シナリオファイル上の CLI である理由。** HTTP とエコシステム共通の gRPC 契約（`hydra.common.v1`、`HYDRA-UMC-ORCHESTRATOR/proto/` 参照）のどちらを選ぶかは、HYDRA-UMC-JOB-DISPATCHER が実際にこのサービスを呼び出す準備ができた時点で独自の検討に値する本当のプロトコル決定です。CLI は今日すでに本当に使えます（`run.bat scenarios/example.json`）。単にまだネットワークに接続されていないだけです。
@@ -77,6 +80,8 @@ HYDRA-UMC-PATH-PLANNER-3D/
 │   ├── rng.rs        # 依存関係のない決定論的 PRNG(xorshift64*)
 │   ├── rrt.rs        # 実際のプランナー：RRT 探索、Workspace、PlannerConfig
 │   ├── validate.rs   # 既に計算済みの経路に対する実際の安全性再チェック
+│   ├── kdtree.rs     # 最近傍探索用の増分 KD ツリー（成長時にバランス再構築）
+│   ├── shrink.rs     # プランナーが自身のバリデーターで失敗するシナリオを最小化する
 │   ├── semantics.rs  # 共有セマンティックゲート：ジオメトリチェックの前に無効なシナリオを拒否する
 │   └── corpus.rs     # テスト専用：rrt.rs と validate.rs 自身のテストが共有する
 │                        再利用可能な障害物/ワークスペースのシナリオ集
@@ -153,7 +158,7 @@ run.bat scenarios/example.json
 ```bash
 cargo test   # 幾何学 + 障害物の衝突判定、PRNG、RRT プランナー自体
              #(その実際の壁時計時間制限を含む)、そして validate.rs の
-             # 安全性再チェック - 合計 56 個のテスト
+             # 安全性再チェック - 合計 66 個のテスト
 ```
 
 ---

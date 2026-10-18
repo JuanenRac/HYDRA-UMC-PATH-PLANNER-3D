@@ -10,13 +10,13 @@
 
 <p align="center">
   <img src="https://img.shields.io/badge/License-GPL%203.0-blue.svg" alt="GPL 3.0">
-  <img src="https://img.shields.io/badge/Algorithm-RRT%20%2F%20Potential%20Fields-orange.svg" alt="Algorithms">
+  <img src="https://img.shields.io/badge/Algorithm-RRT-orange.svg" alt="Algorithms">
   <img src="https://img.shields.io/badge/Engine-Rust-blue.svg" alt="Engine">
 </p>
 
 ---
 
-**Honesty check - what actually runs today:** `src/rrt.rs`'s single-agent RRT search (with its real wall-clock `max_duration_ms` deadline, independent of `max_iterations`), `src/obstacle.rs`'s sphere/segment collision math, `src/geometry.rs`'s vector math, `src/rng.rs`'s deterministic PRNG, `src/semantics.rs`'s scenario validation gate, `src/validate.rs`'s safety re-check of an already-computed path, and `src/shrink.rs`'s real case-minimization for a failing scenario (deletes obstacles then tightens the workspace/iteration budget, re-checking the exact same failure predicate after every tentative reduction, never a scenario that merely looks smaller while testing something else) are real and tested (56 tests, `cargo test`) - every returned path is verified obstacle-clear in tests, not just plausible-looking. The CLI (`run.sh scenarios/example.json`, plus the `validate` and `shrink` subcommands) is genuinely usable today. What is still aspirational: this is a plain single-threaded RRT, not RRT* (no optimality-rewiring pass exists in the code) and not a multi-robot coordinator - the "up to 32+ robots simultaneously" and "sub-50ms path generation" language elsewhere in this README describe a future target, not a measured result; there is no C++ anywhere in this repository (Cargo.toml has exactly two dependencies, `serde`/`serde_json`, no threading/parallelism crate), and it is a CLI over a JSON scenario file, not yet a network service wired to HYDRA-UMC-JOB-DISPATCHER or validated against a live HYDRA-UMC-TWIN. See `CHANGELOG.md` for exactly what has shipped so far, and `mejoras_futuras.txt` for the complete, honest list of what's deliberately deferred and why.
+**Honesty check - what actually runs today:** `src/rrt.rs`'s single-agent RRT search (with its real wall-clock `max_duration_ms` deadline, independent of `max_iterations`), `src/obstacle.rs`'s sphere/segment collision math, `src/geometry.rs`'s vector math, `src/rng.rs`'s deterministic PRNG, `src/semantics.rs`'s scenario validation gate, `src/validate.rs`'s safety re-check of an already-computed path, and `src/shrink.rs`'s real case-minimization for a failing scenario (deletes obstacles then tightens the workspace/iteration budget, re-checking the exact same failure predicate after every tentative reduction, never a scenario that merely looks smaller while testing something else) are real and tested (66 tests, `cargo test`) - every returned path is verified obstacle-clear in tests, not just plausible-looking. The CLI (`run.sh scenarios/example.json`, plus the `validate` and `shrink` subcommands) is genuinely usable today. What is still aspirational: this is a plain single-threaded RRT, not RRT* (no optimality-rewiring pass exists in the code) and not a multi-robot coordinator - the "up to 32+ robots simultaneously" and "sub-50ms path generation" language elsewhere in this README describe a future target, not a measured result; there is no C++ anywhere in this repository (Cargo.toml has exactly two dependencies, `serde`/`serde_json`, no threading/parallelism crate), and it is a CLI over a JSON scenario file, not yet a network service wired to HYDRA-UMC-JOB-DISPATCHER or validated against a live HYDRA-UMC-TWIN. See `CHANGELOG.md` for exactly what has shipped so far, and `mejoras_futuras.txt` for the complete, honest list of what's deliberately deferred and why.
 
 ---
 
@@ -31,6 +31,7 @@ It integrates real-time occupancy data from the Vision Nodes and kinematic const
 * 🛡️ **Path Re-Validation Against Changed Obstacles (real today):** the `validate` subcommand (`src/validate.rs`) re-checks an already-computed path against a scenario's current obstacles/workspace without a new search. Automatic real-time re-planning triggered by newly-detected obstacles is not implemented yet - today it is an explicit, separate command a caller runs.
 * ⚡ **Deterministic, Wall-Clock-Bounded Search (real today):** a pure single-threaded Rust implementation (no C++ anywhere in this repository) with a real `PlannerConfig.max_duration_ms` deadline, independent of `max_iterations`. There is no parallelism and no measured sub-50ms benchmark in this codebase - performance claims of that kind describe a future target.
 * 🔄 **JSON Scenario Format (real today):** a scenario is a plain JSON file (`start`/`goal`/`obstacles`/`workspace`/`config`, see BUILD & RUN below). There is no G-Code or URDF parser in this repository - those are HYDRA-UMC-TWIN's own concern, not this planner's.
+* 🧱 **Honest about what it checks (real today):** the workspace is the volume the whole body must stay in, so start, goal, samples and waypoints must keep `robot_radius` clear of its walls (a workspace narrower than the robot is refused); `validate` also requires the path to begin at the scenario's `start` and end at its `goal` (within 1e-6), so a cached path from another pose, or a single waypoint, is no longer "safe"; `config` may list only the fields it changes; `max_iterations` is capped at 10,000,000; the nearest-neighbour tree is rebuilt balanced as it grows and walked without recursion, so a long straight corridor cannot overflow the stack; stdout carries only the JSON result (the identity lines go to stderr).
 
 ---
 
@@ -39,19 +40,21 @@ It integrates real-time occupancy data from the Vision Nodes and kinematic const
 ```mermaid
 flowchart TB
     GOAL["Swarm Goal / Mission"] --> PLAN["3D PATH-PLANNER"]
-    PLAN --> COLL["Collision Check (Octree)"]
+    PLAN --> COLL["Collision Check (spheres)"]
     VIS["Vision Safety Zones"] --> COLL
     TWIN["Robot Constraints (URDF)"] --> COLL
-    COLL -- Clean --> OPT["Trajectory Optimizer (S-Curve)"]
-    OPT --> SYNC["SWARM-SYNC Dispatch"]
+    COLL -. Clean .-> OPT["Trajectory Optimizer (S-Curve)"]
+    OPT -.-> SYNC["SWARM-SYNC Dispatch"]
 ```
+
+> Dotted arrows are planned, not implemented: the planner reads no occupancy data and no robot constraints, has no trajectory optimiser and does not talk to SWARM-SYNC. It plans one agent through a static set of spheres.
 
 ---
 
 ## 3. 🧱 ARCHITECTURE & DESIGN DECISIONS
 
 * **Why 3D collision-free planning is its own service.** Path search over a live 3D scene (every robot, tool, and obstacle in the cell) is CPU-heavy and latency-sensitive in a different way than job scheduling itself - isolating it means a slow planning query never blocks HYDRA-UMC-JOB-DISPATCHER from assigning other work.
-* **Why it validates against HYDRA-UMC-TWIN before real execution.** A planned route gets checked in the digital twin's own physics simulation first - catching a geometrically-valid-but-physically-unreachable path (torque limits, singularities) before it's ever sent to a real arm.
+* **HYDRA-UMC-TWIN validation is planned, not done.** HYDRA-UMC-TWIN today only reads project manifests: it has no physics or simulation, so nothing checks a planned route for torque limits or singularities before it goes to a real arm. `validate` checks obstacles, the workspace and the two ends of the path, nothing more.
 * **Why the search is a plain RRT today, not RRT\* or a multi-robot coordinator.** `src/rrt.rs` implements a real, tested Rapidly-exploring Random Tree search - a single agent, a static obstacle set, a genuinely collision-free result (every returned path is verified obstacle-clear in tests, not just plausible-looking). RRT\* (an optimality-improving rewiring pass) and true multi-robot synchronized planning (this README's "up to 32+ robots simultaneously") are real, scoped-out future work: proving one agent's search correct came first, rather than building all three at once and debugging them together.
 * **Why obstacles are spheres, not an octree of arbitrary meshes.** A sphere is the simplest 3D collision primitive that is still real and geometrically correct - not a bounding-box stand-in for something more detailed. An octree/BVH only starts to matter once a scene has enough colliders that brute-force checking is the bottleneck; today's swarm cell (a handful of arms and static safety zones) does not.
 * **Why this is a CLI over a JSON scenario file today, not a network service.** Choosing HTTP vs. the ecosystem's shared gRPC contract (`hydra.common.v1`, see `HYDRA-UMC-ORCHESTRATOR/proto/`) is a real protocol decision that deserves its own pass once HYDRA-UMC-JOB-DISPATCHER is actually ready to call this service. The CLI is still genuinely usable today (`run.bat scenarios/example.json`), it just isn't wired into the network yet.
@@ -72,6 +75,8 @@ HYDRA-UMC-PATH-PLANNER-3D/
 │   ├── rng.rs        # Deterministic dependency-free PRNG (xorshift64*)
 │   ├── rrt.rs        # The real planner: RRT search, Workspace, PlannerConfig
 │   ├── validate.rs   # Real safety re-check of an already-computed path
+│   ├── kdtree.rs     # Incremental KD-tree (balanced as it grows) for the nearest-neighbour lookup
+│   ├── shrink.rs     # Minimises a scenario that makes the planner fail its own validator
 │   ├── semantics.rs  # Shared semantic gate: rejects an invalid scenario before any geometry check
 │   └── corpus.rs     # Test-only: reusable obstacle/workspace scenario fixtures
 │                        shared by rrt.rs's and validate.rs's own tests
@@ -147,7 +152,7 @@ obstacles/workspace, without running a new search:
 cargo test   # geometry + obstacle collision math, the PRNG, the RRT
              # planner (including its real wall-clock time limit),
              # validate.rs's own safety re-check, and shrink.rs's real
-             # failing-scenario minimization - 56 tests total
+             # failing-scenario minimization - 66 tests total
 ```
 
 ---

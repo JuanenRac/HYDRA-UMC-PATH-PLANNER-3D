@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "ecosystem": "HYDRA-UMC",
   "name": "HYDRA-UMC-PATH-PLANNER-3D",
-  "version": "0.0.7",
+  "version": "0.0.8",
   "role": "library",
   "stack": "rust",
   "technologies": [
@@ -13,8 +13,8 @@
   "maturity": "established",
   "family": "Orchestration & Swarm",
   "parent": "HYDRA-UMC-ORCHESTRATOR",
-  "build": "cargo build --release.",
-  "notes": "Real RRT-based 3D path planner, tested against real obstacle/workspace scenarios (not yet RRT* - no rewiring pass). Real wall-clock planning time limit (PlannerConfig.max_duration_ms) independent of max_iterations, a reusable obstacle/workspace test corpus, and a new `validate` subcommand that re-checks an externally-supplied path for safety (workspace bounds, obstacle clearance, segment-level collisions) before it is trusted for real execution.",
+  "build": "cargo build --release",
+  "notes": "Real RRT-based 3D path planner, tested against real obstacle/workspace scenarios (not yet RRT* - no rewiring pass). Real wall-clock planning time limit (PlannerConfig.max_duration_ms) independent of max_iterations, a reusable obstacle/workspace test corpus, and a new `validate` subcommand that re-checks an externally-supplied path for safety (workspace bounds, obstacle clearance, segment-level collisions) before it is trusted for real execution. The nearest-neighbour search is a KD-tree rebuilt balanced as it grows and walked without recursion; the workspace is the volume the whole body must stay in (robot_radius is kept clear of its walls); validate also requires the path to begin at the scenario start and end at its goal; stdout carries only the JSON result; 66 tests.",
   "native_version": {
     "file": "Cargo.toml",
     "pattern": "^version\\s*=\\s*\"(\\d+)\\.(\\d+)\\.(\\d+)\""

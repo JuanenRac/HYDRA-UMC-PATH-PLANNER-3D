@@ -10,13 +10,13 @@
 
 <p align="center">
   <img src="https://img.shields.io/badge/Licenza-GPL%203.0-blue.svg" alt="GPL 3.0">
-  <img src="https://img.shields.io/badge/Algoritmo-RRT%20%2F%20Potential%20Fields-orange.svg" alt="Algorithms">
+  <img src="https://img.shields.io/badge/Algoritmo-RRT-orange.svg" alt="Algorithms">
   <img src="https://img.shields.io/badge/Motore-Rust-blue.svg" alt="Engine">
 </p>
 
 ---
 
-**Verifica di onestà - cosa funziona davvero oggi:** la ricerca RRT a singolo agente in `src/rrt.rs` (con la sua vera scadenza `max_duration_ms` basata sull'orologio reale, indipendente da `max_iterations`), la matematica di collisione sfera/segmento di `src/obstacle.rs`, la matematica vettoriale di `src/geometry.rs`, il PRNG deterministico di `src/rng.rs`, il cancello di validazione degli scenari di `src/semantics.rs`, e la riverifica di sicurezza di un percorso già calcolato in `src/validate.rs` sono reali e testati (56 test, `cargo test`) - ogni percorso restituito è verificato privo di ostacoli nei test, non solo plausibile. La CLI (`run.sh scenarios/example.json`, più il sottocomando `validate`) è davvero utilizzabile oggi. Ciò che resta aspirazionale: questo è un RRT semplice a thread singolo, non un RRT* (nel codice non esiste alcun passaggio di ricollegamento per l'ottimalità) né un coordinatore multi-robot - le espressioni "fino a oltre 32 robot contemporaneamente" e "generazione di percorsi in meno di 50 ms" altrove in questo README descrivono un obiettivo futuro, non un risultato misurato; non c'è alcun C++ in nessuna parte di questo repository (Cargo.toml ha esattamente due dipendenze, `serde`/`serde_json`, nessun crate di parallelismo/thread), ed è una CLI su un file di scenario JSON, non ancora un servizio di rete collegato a HYDRA-UMC-JOB-DISPATCHER né validato contro un HYDRA-UMC-TWIN dal vivo. Vedi `CHANGELOG.md` per ciò che è stato consegnato finora esattamente, e `mejoras_futuras.txt` per l'elenco completo e onesto di ciò che è stato deliberatamente rimandato e perché.
+**Verifica di onestà - cosa funziona davvero oggi:** la ricerca RRT a singolo agente in `src/rrt.rs` (con la sua vera scadenza `max_duration_ms` basata sull'orologio reale, indipendente da `max_iterations`), la matematica di collisione sfera/segmento di `src/obstacle.rs`, la matematica vettoriale di `src/geometry.rs`, il PRNG deterministico di `src/rng.rs`, il cancello di validazione degli scenari di `src/semantics.rs`, e la riverifica di sicurezza di un percorso già calcolato in `src/validate.rs` sono reali e testati (66 test, `cargo test`) - ogni percorso restituito è verificato privo di ostacoli nei test, non solo plausibile. La CLI (`run.sh scenarios/example.json`, più il sottocomando `validate`) è davvero utilizzabile oggi. Ciò che resta aspirazionale: questo è un RRT semplice a thread singolo, non un RRT* (nel codice non esiste alcun passaggio di ricollegamento per l'ottimalità) né un coordinatore multi-robot - le espressioni "fino a oltre 32 robot contemporaneamente" e "generazione di percorsi in meno di 50 ms" altrove in questo README descrivono un obiettivo futuro, non un risultato misurato; non c'è alcun C++ in nessuna parte di questo repository (Cargo.toml ha esattamente due dipendenze, `serde`/`serde_json`, nessun crate di parallelismo/thread), ed è una CLI su un file di scenario JSON, non ancora un servizio di rete collegato a HYDRA-UMC-JOB-DISPATCHER né validato contro un HYDRA-UMC-TWIN dal vivo. Vedi `CHANGELOG.md` per ciò che è stato consegnato finora esattamente, e `mejoras_futuras.txt` per l'elenco completo e onesto di ciò che è stato deliberatamente rimandato e perché.
 
 ---
 
@@ -31,6 +31,7 @@ Integra i dati di occupazione in tempo reale dai Vision Node e i vincoli cinemat
 * 🛡️ **Riverifica del percorso contro ostacoli cambiati (reale oggi):** il sottocomando `validate` (`src/validate.rs`) riverifica un percorso già calcolato rispetto agli ostacoli/workspace attuali di uno scenario, senza una nuova ricerca. La ripianificazione automatica in tempo reale attivata da ostacoli appena rilevati non è ancora implementata - oggi è un comando esplicito e separato eseguito da chi chiama.
 * ⚡ **Ricerca deterministica limitata dall'orologio reale (reale oggi):** un'implementazione Rust reale a thread singolo (nessun C++ da nessuna parte in questo repository) con una vera scadenza `PlannerConfig.max_duration_ms`, indipendente da `max_iterations`. Non c'è alcun parallelismo né alcun benchmark misurato sotto i 50 ms in questo codice - affermazioni di prestazioni di quel tipo descrivono un obiettivo futuro.
 * 🔄 **Formato di scenario JSON (reale oggi):** uno scenario è un semplice file JSON (`start`/`goal`/`obstacles`/`workspace`/`config`, vedi COMPILAZIONE ED ESECUZIONE più sotto). Non esiste alcun parser G-Code o URDF in questo repository - sono compiti propri di HYDRA-UMC-TWIN, non di questo pianificatore.
+* 🧱 **Onesto su ciò che controlla (reale oggi):** lo spazio di lavoro è il volume in cui deve restare tutto il corpo, quindi partenza, obiettivo, campioni e punti di passaggio devono mantenere `robot_radius` dalle sue pareti (uno spazio più stretto del robot è rifiutato); `validate` richiede anche che il percorso inizi allo `start` dello scenario e finisca al suo `goal` (entro 1e-6), quindi un percorso in cache da un'altra posa, o un solo punto di passaggio, non è più "sicuro"; `config` può elencare solo i campi che cambia; `max_iterations` è limitato a 10.000.000; l'albero del vicino più prossimo viene ricostruito bilanciato mentre cresce e percorso senza ricorsione, quindi un lungo corridoio dritto non può far traboccare lo stack; stdout porta solo il risultato JSON (le righe di identità vanno su stderr).
 
 ---
 
@@ -39,19 +40,21 @@ Integra i dati di occupazione in tempo reale dai Vision Node e i vincoli cinemat
 ```mermaid
 flowchart TB
     GOAL["Obiettivo dello sciame / Missione"] --> PLAN["3D PATH-PLANNER"]
-    PLAN --> COLL["Controllo collisioni (Octree)"]
+    PLAN --> COLL["Controllo collisioni (sfere)"]
     VIS["Zone di sicurezza Vision"] --> COLL
     TWIN["Vincoli del robot (URDF)"] --> COLL
-    COLL -- Pulito --> OPT["Ottimizzatore di traiettoria (S-Curve)"]
-    OPT --> SYNC["SWARM-SYNC Dispatch"]
+    COLL -. Pulito .-> OPT["Ottimizzatore di traiettoria (S-Curve)"]
+    OPT -.-> SYNC["SWARM-SYNC Dispatch"]
 ```
+
+> Le frecce tratteggiate sono pianificate, non implementate: il pianificatore non legge dati di occupazione né vincoli del robot, non ha un ottimizzatore di traiettorie e non parla con SWARM-SYNC. Pianifica un agente attraverso un insieme statico di sfere.
 
 ---
 
 ## 3. 🧱 ARCHITETTURA E DECISIONI DI PROGETTAZIONE
 
 * **Perché la pianificazione 3D senza collisioni è un servizio a sé.** La ricerca di percorsi su una scena 3D dal vivo (ogni robot, utensile e ostacolo della cella) è intensiva di CPU e sensibile alla latenza in modo diverso dalla pianificazione dei lavori stessa - isolarla significa che una query di pianificazione lenta non blocca mai HYDRA-UMC-JOB-DISPATCHER nell'assegnare altro lavoro.
-* **Perché valida contro HYDRA-UMC-TWIN prima dell'esecuzione reale.** Un percorso pianificato viene prima controllato nella simulazione fisica del gemello digitale - individuando un percorso geometricamente valido ma fisicamente irraggiungibile (limiti di coppia, singolarità) prima che raggiunga mai un braccio reale.
+* **La validazione con HYDRA-UMC-TWIN è pianificata, non fatta.** HYDRA-UMC-TWIN oggi legge solo manifesti di progetto: non ha fisica né simulazione, quindi nulla controlla un percorso pianificato rispetto a limiti di coppia o singolarità prima che vada a un braccio reale. `validate` controlla ostacoli, spazio di lavoro e le due estremità del percorso, nient'altro.
 * **Perché la ricerca è un RRT semplice oggi, non RRT\* né un coordinatore multi-robot.** `src/rrt.rs` implementa una vera ricerca Rapidly-exploring Random Tree, testata - un solo agente, un insieme statico di ostacoli, un risultato genuinamente privo di collisioni (ogni percorso restituito viene verificato libero da ostacoli nei test, non solo plausibile). RRT\* (un passaggio di rewiring che migliora l'ottimalità) e la vera pianificazione multi-robot sincronizzata (i "fino a 32+ robot simultaneamente" di questo README) sono vero lavoro futuro, deliberatamente fuori ambito: dimostrare corretta prima la ricerca a singolo agente è venuto prima, invece di costruire tutte e tre le cose insieme e fare debug insieme.
 * **Perché gli ostacoli sono sfere, non un octree di mesh arbitrarie.** Una sfera è il primitivo di collisione 3D più semplice che resta reale e geometricamente corretto - non un sostituto tipo bounding-box di qualcosa di più dettagliato. Un octree/BVH inizia a contare solo quando una scena ha abbastanza collisori da rendere il controllo a forza bruta il collo di bottiglia - la cella dello sciame di oggi (una manciata di bracci e zone di sicurezza statiche) non ce li ha.
 * **Perché questa è una CLI su un file di scenario JSON oggi, non un servizio di rete.** Scegliere tra HTTP e il contratto gRPC condiviso dell'ecosistema (`hydra.common.v1`, vedi `HYDRA-UMC-ORCHESTRATOR/proto/`) è una vera decisione di protocollo che merita un proprio passaggio quando HYDRA-UMC-JOB-DISPATCHER sarà realmente pronto a chiamare questo servizio. La CLI è già genuinamente utilizzabile oggi (`run.bat scenarios/example.json`), semplicemente non è ancora collegata alla rete.
@@ -72,6 +75,8 @@ HYDRA-UMC-PATH-PLANNER-3D/
 │   ├── rng.rs        # PRNG deterministico senza dipendenze (xorshift64*)
 │   ├── rrt.rs        # Il vero pianificatore: ricerca RRT, Workspace, PlannerConfig
 │   ├── validate.rs   # Riverifica reale di sicurezza di un percorso già calcolato
+│   ├── kdtree.rs     # KD-tree incrementale (bilanciato mentre cresce) per il vicino più prossimo
+│   ├── shrink.rs     # Riduce uno scenario che fa fallire il pianificatore sul proprio validatore
 │   ├── semantics.rs  # Gate semantico condiviso: rifiuta uno scenario non valido prima di qualsiasi controllo geometrico
 │   └── corpus.rs     # Solo per i test: fixture riutilizzabili di scenari
 │                        ostacolo/workspace condivise dai test di rrt.rs e validate.rs
@@ -149,7 +154,7 @@ ricerca:
 cargo test   # geometria + collisione ostacoli, il PRNG, il
              # pianificatore RRT (incluso il suo vero limite di tempo
              # sull'orologio) e la riverifica di sicurezza di validate.rs -
-             # 56 test in totale
+             # 66 test in totale
 ```
 
 ---

@@ -14,7 +14,7 @@
 # (major has no component further left, so it just keeps counting past
 # 9 with no reset - same as a real odometer's leftmost digit never
 # wrapping back to 0 mid-drive).
-# Example: 0.1.9 -> 0.2.0. Another: 0.9.9 -> 0.0.0.
+# Example: 0.1.9 -> 0.2.0. Another: 0.9.9 -> 1.0.0.
 #
 # Called by build.bat/build.sh BEFORE `cargo build --release` runs, so
 # every packaged binary carries a version strictly newer than the last
