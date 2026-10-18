@@ -20,6 +20,16 @@
 
 ---
 
+## 📋 Num relance
+
+| | |
+|---|---|
+| Versão | `0.0.9` |
+| Maturidade | Estabelecido |
+| Testes | 66 (`cargo test`) |
+| Tecnologia | Rust / RRT* path planning |
+| Em hardware real | Ainda não: não há registo de execução em hardware real para esta versão |
+
 ## 1. 🛠️ VISÃO TÉCNICA GERAL
 
 O **HYDRA-UMC-PATH-PLANNER-3D** é a inteligência de navegação centralizada do enxame de robôs. Calcula trajetórias sem colisões para vários braços que partilham o mesmo espaço de trabalho, otimizando a velocidade, a eficiência energética e a suavidade do movimento.

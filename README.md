@@ -20,6 +20,16 @@
 
 ---
 
+## 📋 At a glance
+
+| | |
+|---|---|
+| Version | `0.0.9` |
+| Maturity | Established |
+| Tests | 66 (`cargo test`) |
+| Stack | Rust / RRT* path planning |
+| On real hardware | Not yet: no run on real hardware is recorded for this version |
+
 ## 1. 🛠️ TECHNICAL OVERVIEW
 
 **HYDRA-UMC-PATH-PLANNER-3D** is the centralized navigation intelligence for the robot swarm. It calculates collision-free trajectories for multiple arms sharing the same workspace, optimizing for speed, energy efficiency, and smooth motion.
