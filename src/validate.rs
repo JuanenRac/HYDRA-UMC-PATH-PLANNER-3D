@@ -1,6 +1,6 @@
 // HYDRA-UMC-PATH-PLANNER-3D - validate.rs
 // Copyright (C) 2026 JuanenRac (Electro Hobby 3D) <electrohobby3d@gmail.com>
-// GPL-3.0 - see LICENSE
+// GPL-3.0-or-later - see LICENSE
 //
 // Real safety validation for an ALREADY-COMPUTED path. rrt::plan() only
 // ever returns paths it built collision-free by construction (every

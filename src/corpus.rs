@@ -1,6 +1,6 @@
 // HYDRA-UMC-PATH-PLANNER-3D - corpus.rs (test-only)
 // Copyright (C) 2026 JuanenRac (Electro Hobby 3D) <electrohobby3d@gmail.com>
-// GPL-3.0 - see LICENSE
+// GPL-3.0-or-later - see LICENSE
 //
 // A reusable corpus of obstacle/workspace scenarios shared by rrt.rs's
 // and validate.rs's own tests - one canonical source of "open

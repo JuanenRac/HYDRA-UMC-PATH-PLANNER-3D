@@ -1,6 +1,6 @@
 // HYDRA-UMC-PATH-PLANNER-3D - geometry.rs
 // Copyright (C) 2026 JuanenRac (Electro Hobby 3D) <electrohobby3d@gmail.com>
-// GPL-3.0 - see LICENSE
+// GPL-3.0-or-later - see LICENSE
 //
 // Minimal 3D vector math - only what the RRT planner and its collision
 // checks actually need. Deliberately not pulling in a general-purpose

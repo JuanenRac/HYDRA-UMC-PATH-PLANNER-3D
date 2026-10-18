@@ -1,6 +1,6 @@
 // HYDRA-UMC-PATH-PLANNER-3D - kdtree.rs
 // Copyright (C) 2026 JuanenRac (Electro Hobby 3D) <electrohobby3d@gmail.com>
-// GPL-3.0 - see LICENSE
+// GPL-3.0-or-later - see LICENSE
 //
 // A real, incremental 3D KD-tree for RRT's own nearest-neighbor lookup -
 // rrt.rs's own linear scan was a deliberate, documented v0 choice ("fine

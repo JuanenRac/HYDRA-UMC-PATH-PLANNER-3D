@@ -1,6 +1,6 @@
 // HYDRA-UMC-PATH-PLANNER-3D - tests/cli_contract.rs
 // Copyright (C) 2026 JuanenRac (Electro Hobby 3D) <electrohobby3d@gmail.com>
-// GPL-3.0 - see LICENSE
+// GPL-3.0-or-later - see LICENSE
 //
 // What a caller of the binary sees: stdout is the JSON result and nothing
 // else, a partial config uses defaults, a path that does not begin at the

@@ -9,7 +9,7 @@
 ### 📐 Otimizador de caminhos 3D multirrobô e motor de evitação de colisões
 
 <p align="center">
-  <img src="https://img.shields.io/badge/License-GPL%203.0-blue.svg" alt="GPL 3.0">
+  <img src="https://img.shields.io/badge/License-GPL%203.0--or--later-blue.svg" alt="GPL 3.0 or later">
   <img src="https://img.shields.io/badge/Algorithm-RRT-orange.svg" alt="Algorithms">
   <img src="https://img.shields.io/badge/Engine-Rust-blue.svg" alt="Engine">
 </p>
@@ -252,5 +252,5 @@ Este projeto faz parte do ecossistema de robótica HYDRA-UMC do mesmo autor (Jua
 📺 [youtube.com/@electrohobby3d](https://youtube.com/@electrohobby3d)
 
 ## 📜 LICENÇA
-GPL-3.0 - consulte LICENSE para mais detalhes.
+GPL-3.0-or-later - consulte LICENSE para mais detalhes.
 

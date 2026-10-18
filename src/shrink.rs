@@ -1,6 +1,6 @@
 // HYDRA-UMC-PATH-PLANNER-3D - shrink.rs
 // Copyright (C) 2026 JuanenRac (Electro Hobby 3D) <electrohobby3d@gmail.com>
-// GPL-3.0 - see LICENSE
+// GPL-3.0-or-later - see LICENSE
 //
 // ("Verificador independiente y reduccion de casos fallidos"):
 // validate.rs already answers "is this exact path safe against this

@@ -18,6 +18,11 @@ semantic-versioning judgment calls:
 
 ---
 
+## [0.0.9]
+
+- Build version synchronized with `hydra-umc.project.json` and the repository-native version source.
+- The licence is written as GPL-3.0-or-later in every header and in the package metadata.
+
 ## [0.0.8] - The whole body stays inside the workspace, a path must reach the goal, and a long corridor no longer aborts
 
 - **The workspace is the volume the whole body must stay in.** `robot_radius` only inflated the obstacles, so a centre touching a wall counted as inside. Start, goal, samples and waypoints must now keep `robot_radius` clear of the workspace walls (`plan` answers outside-workspace, `validate` reports the waypoint), and a workspace narrower than the robot is refused.

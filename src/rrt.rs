@@ -1,6 +1,6 @@
 // HYDRA-UMC-PATH-PLANNER-3D - rrt.rs
 // Copyright (C) 2026 JuanenRac (Electro Hobby 3D) <electrohobby3d@gmail.com>
-// GPL-3.0 - see LICENSE
+// GPL-3.0-or-later - see LICENSE
 //
 // The real collision-free path search: a standard RRT (Rapidly-exploring
 // Random Tree), not yet RRT* (no rewiring pass for path optimality) and

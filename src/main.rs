@@ -1,6 +1,6 @@
 // HYDRA-UMC-PATH-PLANNER-3D - entry point
 // Copyright (C) 2026 JuanenRac (Electro Hobby 3D) <electrohobby3d@gmail.com>
-// GPL-3.0 - see LICENSE
+// GPL-3.0-or-later - see LICENSE
 //
 // Real single-agent RRT collision-free path search (src/rrt.rs), driven
 // by a JSON scenario file - not yet a network service. Why a CLI first:

@@ -1,6 +1,6 @@
 // HYDRA-UMC-PATH-PLANNER-3D - obstacle.rs
 // Copyright (C) 2026 JuanenRac (Electro Hobby 3D) <electrohobby3d@gmail.com>
-// GPL-3.0 - see LICENSE
+// GPL-3.0-or-later - see LICENSE
 //
 // Obstacles are spheres - the simplest 3D collision primitive that is
 // still real and correct (not a bounding-box stand-in for something

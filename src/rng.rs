@@ -1,6 +1,6 @@
 // HYDRA-UMC-PATH-PLANNER-3D - rng.rs
 // Copyright (C) 2026 JuanenRac (Electro Hobby 3D) <electrohobby3d@gmail.com>
-// GPL-3.0 - see LICENSE
+// GPL-3.0-or-later - see LICENSE
 //
 // A tiny, deterministic, dependency-free PRNG (xorshift64*) for RRT's
 // random sampling. Not cryptographically secure, and not meant to be -
