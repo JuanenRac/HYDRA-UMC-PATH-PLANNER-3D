@@ -101,9 +101,9 @@ HYDRA-UMC-PATH-PLANNER-3D/
 ├── build/            # Compiled binaries (build.sh/build.bat output)
 ├── mejoras_futuras.txt  # The complete, honest list of what's deliberately deferred and why
 ├── Cargo.toml        # Rust package manifest (name, version, deps)
-├── bump_version.py   # Odometer-style version bump, run by build.sh/.bat
+├── bump_version.py   # Odometer-style version bump (run only by the explicit `bump` command)
 ├── bump_manifest_version.py  # Syncs hydra-umc.project.json's version to the native one (--sync)
-├── build.sh/.bat     # Bumps version, then `cargo build --release`
+├── build.sh/.bat     # Validate and build (building never changes the version)
 ├── run.sh/.bat       # Runs the compiled binary
 └── README.md
 ```
@@ -129,8 +129,7 @@ run.bat scenarios/example.json
 ./run.sh scenarios/example.json
 ```
 
-`build.sh`/`build.bat` bump the version in `Cargo.toml` (ecosystem-wide
-odometer rule, see `bump_version.py`) and then run `cargo build --release`.
+`build.sh`/`build.bat` never change the version (only `python tools/hydra_project_tool.py bump` raises it) and then run `cargo build --release`.
 `run.sh`/`run.bat` execute the resulting binary directly, forwarding any
 arguments (the scenario path) to it.
 

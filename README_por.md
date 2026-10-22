@@ -101,9 +101,9 @@ HYDRA-UMC-PATH-PLANNER-3D/
 ├── build/            # Binários compilados (saída de build.sh/build.bat)
 ├── mejoras_futuras.txt  # A lista completa e honesta do que foi deliberadamente adiado e porquê
 ├── Cargo.toml        # Manifesto do pacote Rust (nome, versão, dependências)
-├── bump_version.py   # Subida de versão estilo odómetro, executada por build.sh/.bat
+├── bump_version.py   # Subida de versão ao estilo conta-quilómetros (executada só pelo comando `bump` explícito)
 ├── bump_manifest_version.py  # Sincroniza a versão do hydra-umc.project.json com a nativa (--sync)
-├── build.sh/.bat     # Sobe a versão e depois `cargo build --release`
+├── build.sh/.bat     # Valida e compila (compilar nunca altera a versão)
 ├── run.sh/.bat       # Executa o binário compilado
 └── README.md
 ```
@@ -126,7 +126,7 @@ run.bat scenarios/example.json
 ./run.sh scenarios/example.json
 ```
 
-O `build.sh`/`build.bat` sobe a versão no `Cargo.toml` (regra de odómetro de todo o ecossistema, ver `bump_version.py`) e depois executa `cargo build --release`. O `run.sh`/`run.bat` executa diretamente o binário resultante, reencaminhando para ele quaisquer argumentos (o caminho do cenário).
+`build.sh`/`build.bat` nunca altera a versão (só `python tools/hydra_project_tool.py bump` a sobe) e depois executa `cargo build --release`. O `run.sh`/`run.bat` executa diretamente o binário resultante, reencaminhando para ele quaisquer argumentos (o caminho do cenário).
 
 Um cenário é um ficheiro JSON com `start`, `goal`, `obstacles` (uma lista de esferas `{center, radius}`), um `workspace` (limites `min`/`max`) e, opcionalmente, um `seed` (a pesquisa é totalmente determinista por semente) e um `config` (`max_iterations`, `step_size`, `goal_bias`, `goal_threshold`, `robot_radius`, `max_duration_ms` - todos opcionais, com valores por defeito sensatos; o `max_duration_ms` limita o tempo de pesquisa pelo relógio de parede, independentemente de `max_iterations`). O resultado é impresso como JSON: `{"status": "ok", "path": [...]}` ou `{"status": "error", "reason": "..."}` (`start_inside_obstacle`, `goal_outside_workspace`, `no_path_found`, `time_limit_exceeded`, etc. - ver o `PlanError` do `src/rrt.rs` para a lista completa e honesta, incluindo o caso em que não existe caminho nenhum, e não apenas um que a pesquisa não encontrou a tempo).
 
