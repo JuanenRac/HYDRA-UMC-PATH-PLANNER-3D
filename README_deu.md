@@ -26,7 +26,7 @@
 
 | | |
 |---|---|
-| Version | `0.1.0` |
+| Version | `0.1.1` |
 | Reifegrad | Funktionsfähig |
 | Tests | 66 (`cargo test`) |
 | Technik | Rust / RRT* path planning |

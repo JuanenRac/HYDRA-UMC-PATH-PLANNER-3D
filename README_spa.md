@@ -26,7 +26,7 @@
 
 | | |
 |---|---|
-| Versión | `0.1.0` |
+| Versión | `0.1.1` |
 | Madurez | Funcional |
 | Tests | 66 (`cargo test`) |
 | Tecnología | Rust / RRT* path planning |
