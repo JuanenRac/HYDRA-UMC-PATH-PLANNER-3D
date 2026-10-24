@@ -105,12 +105,17 @@ HYDRA-UMC-PATH-PLANNER-3D/
 │   ├── semantics.rs  # Porta semântica partilhada: rejeita um cenário inválido antes de qualquer verificação geométrica
 │   └── corpus.rs     # Só para testes: fixtures reutilizáveis de cenários de obstáculos/espaço de trabalho
 │                        partilhadas pelos testes do rrt.rs e do validate.rs
+├── tests/        # cli_contract.rs: o contrato da linha de comandos (o stdout é só o resultado JSON, uma configuração parcial usa os valores por omissão, um caminho começa no início e acaba no objetivo)
 ├── scenarios/        # Cenários JSON de exemplo (ver COMPILAÇÃO E EXECUÇÃO abaixo)
 ├── docs/
 │   └── CLI_REFERENCE.md  # Referência das flags da linha de comandos
 ├── images/           # Multimédia e diagramas
 ├── tools/
-│   └── ci_validate.py   # Validação de manifesto/CHANGELOG/docs usada pelo CI
+│   ├── build_test.py     # Verificação de compilação sem alterar versões
+│   ├── ci_validate.py   # Validação de manifesto/CHANGELOG/docs usada pelo CI
+│   ├── _doc_policy.py   # Regras de documentação partilhadas pela família (cópia da de HYDRA-UMC-SDK, mantida em sincronia)
+│   ├── _readme_parity.py # Verificação de que os oito README partilham a mesma estrutura (cópia da de HYDRA-UMC-SDK, mantida em sincronia)
+│   └── hydra_project_tool.py # Os mesmos comandos em todos os repositórios: validate, test, ci, version, status, bump
 ├── build/            # Binários compilados (saída de build.sh/build.bat)
 ├── mejoras_futuras.txt  # A lista completa e honesta do que foi deliberadamente adiado e porquê
 ├── Cargo.toml        # Manifesto do pacote Rust (nome, versão, dependências)

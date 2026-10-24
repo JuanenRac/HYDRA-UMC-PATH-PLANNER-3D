@@ -110,12 +110,17 @@ HYDRA-UMC-PATH-PLANNER-3D/
 │   ├── semantics.rs  # 共有セマンティックゲート：ジオメトリチェックの前に無効なシナリオを拒否する
 │   └── corpus.rs     # テスト専用：rrt.rs と validate.rs 自身のテストが共有する
 │                        再利用可能な障害物/ワークスペースのシナリオ集
+├── tests/        # cli_contract.rs: コマンドラインの契約 (stdout は JSON の結果のみ、部分的な設定は既定値を使う、経路は開始点で始まり目標で終わる)
 ├── scenarios/        # サンプル JSON シナリオ(下記「ビルドと実行」参照)
 ├── docs/
 │   └── CLI_REFERENCE.md  # コマンドラインフラグのリファレンス
 ├── images/           # メディアと図版
 ├── tools/
-│   └── ci_validate.py   # CI が使用する manifest/CHANGELOG/docs の検証
+│   ├── build_test.py     # バージョンを増やさないビルドチェック
+│   ├── ci_validate.py   # CI が使用する manifest/CHANGELOG/docs の検証
+│   ├── _doc_policy.py   # ファミリー共通のドキュメント規則 (HYDRA-UMC-SDK のコピーで、同期を維持)
+│   ├── _readme_parity.py # 8つの README が同じ構造であることの検査 (HYDRA-UMC-SDK のコピーで、同期を維持)
+│   └── hydra_project_tool.py # すべてのリポジトリで共通のコマンド: validate、test、ci、version、status、bump
 ├── build/            # コンパイル済みバイナリ（build.sh/build.bat の出力）
 ├── mejoras_futuras.txt  # 意図的に後回しにした内容とその理由を完全にまとめた正直なリスト
 ├── Cargo.toml        # Rust パッケージマニフェスト（名前、バージョン、依存関係）

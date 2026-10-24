@@ -107,12 +107,17 @@ HYDRA-UMC-PATH-PLANNER-3D/
 │   ├── semantics.rs  # 共享语义门：在任何几何检查之前拒绝无效场景
 │   └── corpus.rs     # 仅用于测试：rrt.rs 和 validate.rs 自身测试共享的
 │                        可复用障碍物/工作空间场景集
+├── tests/        # cli_contract.rs: 命令行契约 (stdout 只有 JSON 结果,部分配置使用默认值,路径从起点开始、在目标结束)
 ├── scenarios/        # 示例 JSON 场景（见下方"构建与运行"）
 ├── docs/
 │   └── CLI_REFERENCE.md  # 命令行参数参考
 ├── images/           # 媒体与图示
 ├── tools/
-│   └── ci_validate.py   # CI 使用的 manifest/CHANGELOG/docs 校验
+│   ├── build_test.py     # 不递增版本号的构建检查
+│   ├── ci_validate.py   # CI 使用的 manifest/CHANGELOG/docs 校验
+│   ├── _doc_policy.py   # 家族共享的文档规则 (HYDRA-UMC-SDK 的副本,保持同步)
+│   ├── _readme_parity.py # 检查八个 README 结构一致 (HYDRA-UMC-SDK 的副本,保持同步)
+│   └── hydra_project_tool.py # 每个仓库相同的命令: validate、test、ci、version、status、bump
 ├── build/            # 编译后的二进制文件（build.sh/build.bat 的输出）
 ├── mejoras_futuras.txt  # 完整、诚实地列出哪些内容被有意推迟及原因
 ├── Cargo.toml        # Rust 包清单（名称、版本、依赖项）
