@@ -1,3 +1,9 @@
+<!-- =============================================================================
+HYDRA-UMC-PATH-PLANNER-3D - RRT path planner with collision validation
+Copyright (C) JuanenRac (Electro Hobby 3D) <electrohobby3d@gmail.com>
+GPL-3.0-or-later - see LICENSE
+============================================================================= -->
+
 <p align="center">
   <img src="images/HYDRA_UMC_BANNER.svg" alt="HYDRA-UMC-PATH-PLANNER-3D banner" width="100%">
 </p>
@@ -9,9 +15,12 @@
 ### 📐 Optimiseur de trajectoire 3D multi-robot et moteur d'évitement de collision
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Licence-GPL%203.0--or--later-blue.svg" alt="GPL 3.0 or later">
-  <img src="https://img.shields.io/badge/Algorithme-RRT-orange.svg" alt="Algorithms">
-  <img src="https://img.shields.io/badge/Moteur-Rust-blue.svg" alt="Engine">
+  <img src="https://img.shields.io/badge/License-GPL%203.0--or--later-blue.svg" alt="GPL 3.0 or later">
+  <img src="https://img.shields.io/badge/Algorithm-RRT-orange.svg" alt="Algorithm">
+  <img src="https://img.shields.io/badge/Engine-Rust-blue.svg" alt="Engine">
+  <img src="https://img.shields.io/badge/Tests-66%20passing-2ea44f.svg" alt="Tests">
+  <img src="https://img.shields.io/badge/Version-0.1.1-0f6cbd.svg" alt="Version">
+  <img src="https://img.shields.io/badge/Maturity-functional-0F6CBD.svg" alt="Maturity">
 </p>
 
 ---
@@ -22,6 +31,8 @@
 
 > **État de la sûreté et de la cybersécurité :** cet écosystème n'est pas un système de sécurité certifié. Il n'existe pas encore de chaîne d'E-STOP matérielle, ni de limites ou de verrouillages imposés par le firmware, ni de commande de mouvement vérifiée ; les images de firmware sont contrôlées par CRC32 et un HMAC-SHA256 à clé partagée, pas par une signature asymétrique ; TLS et TLS mutuel sont optionnels et désactivés par défaut ; aucune carte propre n'a encore été assemblée ni testée. Lisez la [base de sécurité](https://github.com/JuanenRac/HYDRA-UMC-DOCS/blob/main/docs/SECURITY_BASELINE.md) et le [modèle de menaces](https://github.com/JuanenRac/HYDRA-UMC-DOCS/blob/main/docs/THREAT_MODEL.md) avant de vous fier à une affirmation d'ici pour la sécurité d'une personne.
 
+---
+
 ## 📋 En un coup d'œil
 
 | | |
@@ -31,6 +42,8 @@
 | Tests | 66 (`cargo test`) |
 | Technologie | Rust / RRT* path planning |
 | Sur matériel réel | Pas encore : aucune exécution sur du matériel réel n'est consignée pour cette version |
+
+**Aller à :** [Présentation](#-présentation) · [Architecture](#-architecture) · [Démarrage rapide](#-démarrage-rapide) · [Tests](#-tests) · [Structure du dépôt](#-structure-du-dépôt) · [Projets liés](#-projets-liés)
 
 ## 🚦 État du projet
 
@@ -45,7 +58,7 @@ Chaque ligne est une partie de ce dépôt et le feu dit où elle en est aujourd'
 | Matériel réel | 🔴 | Pas encore : aucune exécution sur du matériel réel n'est consignée pour cette version |
 | Documentation | 🟢 | README en huit langues, vérifié par rapport au manifeste à chaque modification |
 
-## 1. 🛠️ APERÇU TECHNIQUE
+## 🎯 Présentation
 
 **HYDRA-UMC-PATH-PLANNER-3D** est l'intelligence de navigation centralisée pour l'essaim de robots. Il calcule des trajectoires sans collision pour plusieurs bras partageant le même espace de travail, en optimisant la vitesse, l'efficacité énergétique et la fluidité du mouvement.
 
@@ -58,9 +71,18 @@ Il intègre les données d'occupation en temps réel des nœuds de vision et les
 * 🔄 **Format de scénario JSON (réel aujourd'hui) :** un scénario est un simple fichier JSON (`start`/`goal`/`obstacles`/`workspace`/`config`, voir COMPILATION ET EXÉCUTION ci-dessous). Il n'y a aucun analyseur G-Code ou URDF dans ce dépôt - cela relève de HYDRA-UMC-TWIN, pas de ce planificateur.
 * 🧱 **Honnête sur ce qu'il vérifie (réel aujourd'hui) :** l'espace de travail est le volume dans lequel tout le corps doit rester, donc départ, but, échantillons et points de passage doivent garder `robot_radius` de distance à ses parois (un espace plus étroit que le robot est refusé) ; `validate` exige aussi que le chemin commence au `start` du scénario et finisse à son `goal` (à 1e-6), si bien qu'un chemin en cache d'une autre pose, ou un seul point de passage, n'est plus "sûr" ; `config` peut ne lister que les champs qu'il change ; `max_iterations` est plafonné à 10 000 000 ; l'arbre du plus proche voisin est reconstruit équilibré en grandissant et parcouru sans récursion, si bien qu'un long couloir droit ne peut pas faire déborder la pile ; stdout ne porte que le résultat JSON (les lignes d'identité vont sur stderr).
 
----
+## 🧩 Rôle dans HYDRA-UMC
 
-## 2. 🔄 FLUX DE TRAVAIL DE PLANIFICATION
+**HYDRA-UMC-PATH-PLANNER-3D** planifie une trajectoire sans collision pour un robot à travers une scène d'obstacles sphériques (recherche RRT) et vérifie une trajectoire par rapport aux obstacles et aux limites de l'espace de travail. C'est une bibliothèque et un outil en ligne de commande en Rust ; il ne planifie pas encore pour plusieurs robots à la fois.
+
+## 🏛️ Architecture
+
+<p align="center">
+  <img src="images/architecture.svg" alt="HYDRA-UMC-PATH-PLANNER-3D architecture" width="100%">
+</p>
+
+<details>
+<summary>Version texte du diagramme (Mermaid)</summary>
 
 ```mermaid
 flowchart TB
@@ -72,11 +94,13 @@ flowchart TB
     OPT -.-> SYNC["Expédition SWARM-SYNC"]
 ```
 
+</details>
+
+### FLUX DE TRAVAIL DE PLANIFICATION
+
 > Les flèches pointillées sont prévues, pas implémentées : le planificateur ne lit ni données d'occupation ni contraintes du robot, n'a pas d'optimiseur de trajectoire et ne parle pas à SWARM-SYNC. Il planifie un agent à travers un ensemble statique de sphères.
 
----
-
-## 3. 🧱 ARCHITECTURE & DÉCISIONS DE CONCEPTION
+### ARCHITECTURE & DÉCISIONS DE CONCEPTION
 
 * **Pourquoi la planification 3D sans collision est un service à part.** La recherche de trajectoire sur une scène 3D en direct (chaque robot, outil et obstacle de la cellule) est gourmande en CPU et sensible à la latence d'une manière différente de la planification de tâches elle-même - l'isoler signifie qu'une requête de planification lente ne bloque jamais HYDRA-UMC-JOB-DISPATCHER dans l'attribution d'un autre travail.
 * **La validation avec HYDRA-UMC-TWIN est prévue, pas faite.** HYDRA-UMC-TWIN ne lit aujourd'hui que des manifestes de projet : il n'a ni physique ni simulation, donc rien ne vérifie un itinéraire planifié par rapport aux limites de couple ou aux singularités avant qu'il parte vers un vrai bras. `validate` vérifie les obstacles, l'espace de travail et les deux extrémités du chemin, rien de plus.
@@ -87,52 +111,23 @@ flowchart TB
 * **Pourquoi `max_duration_ms` est une vérification de l'horloge réelle, pas juste un `max_iterations` plus bas.** Le nombre d'itérations seul ne peut pas borner le temps réel : une scène avec des obstacles plus denses rend les vérifications de collision de chaque itération proportionnellement plus lentes, donc le même budget d'itérations peut prendre un temps réel très différent sur une scène pathologique par rapport à une scène ouverte. Un appel au planificateur dans une boucle de contrôle temps réel a besoin d'un vrai budget de temps, pas d'un substitut.
 * **Pourquoi `validate` est une nouvelle sous-commande plutôt qu'un changement de ce que renvoie `plan()`.** `rrt::plan()` ne renvoie déjà que des trajectoires construites sans collision - il n'y a rien à corriger là. `validate_path()`/la sous-commande `validate` existe pour des trajectoires qui NE proviennent PAS d'un appel `plan()` frais dans ce processus : une trajectoire mise en cache/rejouée, une relayée par un autre processus, un scénario modifié à la main - où l'ensemble d'obstacles a pu changer depuis le calcul de la trajectoire. Le même motif utilisé dans tout l'écosystème : un nouveau point d'entrée protégé ajouté à côté d'une primitive de bas niveau inchangée.
 
----
+## 🚀 Démarrage rapide
 
-## 📂 STRUCTURE DES RÉPERTOIRES
+Nécessite la chaîne d'outils Rust stable (édition 2021) avec `cargo`.
 
-```text
-HYDRA-UMC-PATH-PLANNER-3D/
-├── src/
-│   ├── main.rs       # Point d'entrée CLI : charge un scénario, planifie, imprime le JSON
-│   ├── geometry.rs   # Vec3 - l'algèbre vectorielle 3D minimale nécessaire
-│   ├── obstacle.rs   # Obstacles sphériques + vérifications de collision
-│   ├── rng.rs        # PRNG déterministe sans dépendance (xorshift64*)
-│   ├── rrt.rs        # Le véritable planificateur : recherche RRT, Workspace, PlannerConfig
-│   ├── validate.rs   # Revérification réelle de sécurité d'une trajectoire déjà calculée
-│   ├── kdtree.rs     # KD-tree incrémental (équilibré en grandissant) pour le plus proche voisin
-│   ├── shrink.rs     # Réduit un scénario qui fait échouer le planificateur sur son propre validateur
-│   ├── semantics.rs  # Porte semantique partagee : rejette un scenario invalide avant toute verification geometrique
-│   └── corpus.rs     # Tests uniquement : jeux de scénarios obstacle/workspace
-│                        réutilisables, partagés par les tests de rrt.rs et validate.rs
-├── tests/        # cli_contract.rs : le contrat de la ligne de commande (stdout n'est que le résultat JSON, une configuration partielle utilise les valeurs par défaut, un chemin commence au départ et finit à l'objectif)
-├── scenarios/        # Scénarios JSON d'exemple (voir BUILD ET EXÉCUTION ci-dessous)
-├── docs/
-│   └── CLI_REFERENCE.md  # Référence des options de ligne de commande
-├── images/           # Médias et diagrammes
-├── tools/
-│   ├── build_test.py     # Vérification de build sans versionnage
-│   ├── ci_validate.py   # Validation manifest/CHANGELOG/docs utilisée par la CI
-│   ├── _doc_policy.py   # Règles de documentation partagées par la famille (copie de celle de HYDRA-UMC-SDK, tenue synchronisée)
-│   ├── _readme_parity.py # Contrôle que les huit README partagent la même structure (copie de celui de HYDRA-UMC-SDK, tenue synchronisée)
-│   └── hydra_project_tool.py # Les mêmes commandes dans chaque dépôt : validate, test, ci, version, status, bump
-├── build/            # Binaires compilés (sortie de build.sh/build.bat)
-├── mejoras_futuras.txt  # La liste complète et honnête de ce qui est délibérément reporté, et pourquoi
-├── Cargo.toml        # Manifeste du paquet Rust (nom, version, dépendances)
-├── bump_version.py   # Incrément de version type compteur kilométrique (exécuté seulement par la commande `bump` explicite)
-├── bump_manifest_version.py  # Synchronise la version de hydra-umc.project.json avec la version native (--sync)
-├── build.sh/.bat     # Valide et compile (compiler ne change jamais la version)
-├── run.sh/.bat       # Exécute le binaire compilé
-└── README.md
+```bash
+./build.sh  # Linux, macOS (build.bat on Windows)
+./run.sh scenarios/example.json
+cargo test
 ```
 
-Élagué du modèle original : `hardware/`, `firmware/` et `os/` — il
-s'agit d'un service purement logiciel (binaire Rust) sans matériel ni
-firmware propres et sans image de système d'exploitation à maintenir.
+## 🧪 Tests
 
----
+66 tests automatiques s'exécutent avec `cargo test`. Ils n'ont besoin ni de matériel ni de rien en dehors de cette machine.
 
-## 🔧 BUILD ET EXÉCUTION
+La CI exécute `HYDRA_UMC_CI=1 python tools/ci_validate.py`, qui vérifie le manifeste, les documents, les huit README et les images.
+
+## 🏗️ Compilation et publication
 
 Une véritable recherche de trajectoire sans collision, pas seulement un
 squelette qui compile : elle planifie une route à partir d'un fichier de
@@ -187,17 +182,62 @@ cargo test   # geometrie + collision d'obstacles, le PRNG, le
              # 66 tests au total
 ```
 
----
+## 📂 Structure du dépôt
 
-## 🚀 FEUILLE DE ROUTE
+<p align="center">
+  <img src="images/repository-structure.svg" alt="Repository structure of HYDRA-UMC-PATH-PLANNER-3D" width="100%">
+</p>
+
+<details>
+<summary>Version texte de l'arborescence</summary>
+
+```text
+HYDRA-UMC-PATH-PLANNER-3D/
+├── src/                       code source
+│   ├── main.rs                Point d'entrée CLI : charge un scénario, planifie, imprime le JSON
+│   ├── geometry.rs            Vec3 - l'algèbre vectorielle 3D minimale nécessaire
+│   ├── obstacle.rs            Obstacles sphériques + vérifications de collision
+│   ├── rng.rs                 PRNG déterministe sans dépendance (xorshift64*)
+│   ├── rrt.rs                 Le véritable planificateur : recherche RRT, Workspace, PlannerConfig
+│   ├── validate.rs            Revérification réelle de sécurité d'une trajectoire déjà calculée
+│   ├── kdtree.rs              KD-tree incrémental (équilibré en grandissant) pour le plus proche voisin
+│   ├── shrink.rs              Réduit un scénario qui fait échouer le planificateur sur son propre validateur
+│   ├── semantics.rs           Porte semantique partagee : rejette un scenario invalide avant toute verification geometrique
+│   └── corpus.rs              Tests uniquement : jeux de scénarios obstacle/workspace
+├── tests/                     cli_contract.rs : le contrat de la ligne de commande (stdout n'est que le résultat JSON, une configuration partielle utilise les valeurs par défaut, un chemin commence au départ et finit à l'objectif)
+├── scenarios/                 scénarios JSON d'exemple
+├── docs/                      documents du projet
+├── images/                    Médias et diagrammes
+├── tools/                     outils du projet et vérifications de la CI
+├── .github/                   workflow de CI et modèles de tickets
+├── mejoras_futuras.txt        La liste complète et honnête de ce qui est délibérément reporté, et pourquoi
+├── Cargo.toml                 Manifeste du paquet Rust (nom, version, dépendances)
+├── bump_version.py            Incrément de version type compteur kilométrique (exécuté seulement par la commande `bump` explicite)
+├── bump_manifest_version.py   Synchronise la version de hydra-umc.project.json avec la version native (--sync)
+├── CHANGELOG.md               ce qui a changé à chaque version
+├── build-test.sh              vérification de build sans modification
+├── build.sh                   construit et vérifie ; ne change jamais la version
+├── hydra-umc.project.json     manifeste : version, maturité, famille
+├── run.sh                     démarre le programme
+└── test.sh                    lance les tests
+```
+
+</details>
+
+## 🗺️ Feuille de route et limites connues
+
+**Limites connues aujourd'hui**
+
 * **Phase 1 :** Synchronisation déterministe d'essaim sur TSN et réduction de la gigue sub-ms.
 * **Phase 2 :** Planification de trajectoires 3D avec évitement dynamique d'obstacles dans les cellules multi-robots.
 * **Phase 3 :** Optimisation de la répartition des tâches multi-robots à l'aide de la disponibilité des ressources en temps réel.
 * **Phase 4 :** Prise en charge de la planification de trajectoire de base mobile non holonome (JuanenBOT) et intégration de flotte hétérogène.
 
----
+## 🌍 Langues
 
-## 🔗 Projets Liés
+Ce README et les documents du dépôt existent en huit langues : anglais, espagnol, allemand, français, italien, japonais, chinois et portugais (Portugal). Ils sont écrits ensemble et la CI vérifie que les huit fichiers ont les mêmes sections et les mêmes liens. Ce dépôt n'a ni écran ni catalogue de messages propre, il n'y a donc aucune chaîne d'interface à traduire.
+
+## 🔗 Projets liés
 
 Ce projet fait partie de l'écosystème robotique HYDRA-UMC du même auteur (JuanenRac / Electro Hobby 3D). Bon à savoir, car une demande pourrait en réalité concerner l'un de ceux-ci plutôt que ce dépôt.
 
@@ -288,21 +328,26 @@ Ce projet fait partie de l'écosystème robotique HYDRA-UMC du même auteur (Jua
 - **[HYDRA-UMC-OPS-AGENT](https://github.com/JuanenRac/HYDRA-UMC-OPS-AGENT)** — coordinateur d'incidents de maintenance : un rôle edge à faible privilège collecte un instantané d'inventaire/santé assaini, un rôle control-plane le rend en lecture seule et demande à un fournisseur d'IA de suggérer un diagnostic - n'applique jamais de correctif ni ne déploie rien.
 - **[HYDRA-UMC-DEV-SERVER](https://github.com/JuanenRac/HYDRA-UMC-DEV-SERVER)** — hôte de développement reproductible (Raspberry Pi 5 / CM5) qui héberge le code source de l'écosystème et exécute des tâches de compilation/test délimitées via une file d'attente durable ; un rôle de développement dédié, explicitement distinct d'un CM5 opérationnel.
 
+## 📚 Documentation
 
----
+Où lire la suite :
 
-## 📚 Documentation & Communauté
+* [Base de sécurité de l'écosystème](https://github.com/JuanenRac/HYDRA-UMC-DOCS/blob/main/docs/SECURITY_BASELINE.md)
+* [Modèle de menaces de l'écosystème](https://github.com/JuanenRac/HYDRA-UMC-DOCS/blob/main/docs/THREAT_MODEL.md)
+* [Journal des modifications de ce dépôt](CHANGELOG.md)
+* [Licence de ce dépôt](LICENSE.md)
 
-- **[CONTRIBUTING.md](CONTRIBUTING.md)** — pile technologique et lignes directrices de codage pour une pull request.
-- **[CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md)** — les normes de comportement attendues dans cette communauté.
-- **[SECURITY.md](SECURITY.md)** — comment signaler une vulnérabilité, et les véritables axes de sécurité de ce projet.
-- **[SUPPORT.md](SUPPORT.md)** — où poser des questions et signaler des bugs.
-- **[LICENSE.md](LICENSE.md)** — la licence propre de ce projet.
+## 🤝 Contribuer et communauté
+
+* Avant une pull request, exécutez `HYDRA_UMC_CI=1 py -3 tools/ci_validate.py` (ou `HYDRA_UMC_CI=1 python3 tools/ci_validate.py`) : il doit afficher `CI_VALIDATION=PASS`. N'exécutez pas `build.sh` ni `build.bat` pour cette vérification ; compiler n'est pas vérifier.
+* Les huit README sont écrits à partir d'une source unique dans HYDRA-UMC-DOCS ; ne les modifiez pas à la main. Changez la source et réécrivez-les avec `tools/make_readmes.py`.
+* N'affirmez pas dans un README ce qui n'a pas tourné : écrivez « simulé » ou « non essayé sur matériel » quand c'est la vérité.
+* Voir [CONTRIBUTING.md](CONTRIBUTING.md), le [code de conduite](CODE_OF_CONDUCT.md), [SECURITY.md](SECURITY.md) et [SUPPORT.md](SUPPORT.md).
 
 ## 👤 AUTEUR
-**JuanenRac** (Electro Hobby 3D)
-📧 electrohobby3d@gmail.com
-📺 [youtube.com/@electrohobby3d](https://youtube.com/@electrohobby3d)
+
+**JuanenRac (Electro Hobby 3D)** · electrohobby3d@gmail.com
 
 ## 📜 LICENCE
-GPL-3.0-or-later - Voir le fichier LICENSE pour plus de détails.
+
+GPL-3.0-or-later - [LICENSE](LICENSE).

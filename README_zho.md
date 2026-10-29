@@ -1,3 +1,9 @@
+<!-- =============================================================================
+HYDRA-UMC-PATH-PLANNER-3D - RRT path planner with collision validation
+Copyright (C) JuanenRac (Electro Hobby 3D) <electrohobby3d@gmail.com>
+GPL-3.0-or-later - see LICENSE
+============================================================================= -->
+
 <p align="center">
   <img src="images/HYDRA_UMC_BANNER.svg" alt="HYDRA-UMC-PATH-PLANNER-3D banner" width="100%">
 </p>
@@ -9,9 +15,12 @@
 ### 📐 多机器人 3D 路径优化与避碰引擎
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Licencia-GPL%203.0--or--later-blue.svg" alt="GPL 3.0 or later">
-  <img src="https://img.shields.io/badge/Algorithm-RRT-orange.svg" alt="Algorithms">
+  <img src="https://img.shields.io/badge/License-GPL%203.0--or--later-blue.svg" alt="GPL 3.0 or later">
+  <img src="https://img.shields.io/badge/Algorithm-RRT-orange.svg" alt="Algorithm">
   <img src="https://img.shields.io/badge/Engine-Rust-blue.svg" alt="Engine">
+  <img src="https://img.shields.io/badge/Tests-66%20passing-2ea44f.svg" alt="Tests">
+  <img src="https://img.shields.io/badge/Version-0.1.1-0f6cbd.svg" alt="Version">
+  <img src="https://img.shields.io/badge/Maturity-functional-0F6CBD.svg" alt="Maturity">
 </p>
 
 ---
@@ -22,6 +31,8 @@
 
 > **安全与安防现状:**本生态系统不是经认证的安全系统。目前尚无硬件 E-STOP 通路,没有由固件强制执行的限位或联锁,也没有经过验证的运动指令;固件映像使用 CRC32 和共享密钥的 HMAC-SHA256 校验,而非非对称签名;TLS 与双向 TLS 均为可选项,默认关闭;自制电路板尚未组装或测试。在依赖此处任何说法来保障人身安全之前,请先阅读[安全基线](https://github.com/JuanenRac/HYDRA-UMC-DOCS/blob/main/docs/SECURITY_BASELINE.md)和[威胁模型](https://github.com/JuanenRac/HYDRA-UMC-DOCS/blob/main/docs/THREAT_MODEL.md)。
 
+---
+
 ## 📋 速览
 
 | | |
@@ -31,6 +42,8 @@
 | 测试 | 66 (`cargo test`) |
 | 技术栈 | Rust / RRT* path planning |
 | 真实硬件 | 尚未：此版本没有在真实硬件上运行的记录 |
+
+**跳转：** [概述](#-概述) · [架构](#-架构) · [快速开始](#-快速开始) · [测试](#-测试) · [仓库结构](#-仓库结构) · [相关项目](#-相关项目)
 
 ## 🚦 项目状态
 
@@ -45,7 +58,7 @@
 | 真实硬件 | 🔴 | 尚未：此版本没有在真实硬件上运行的记录 |
 | 文档 | 🟢 | 八种语言的 README，每次变更都会与清单核对 |
 
-## 1. 🛠️ 技术概述
+## 🎯 概述
 
 **HYDRA-UMC-PATH-PLANNER-3D** 是机器人集群的集中式导航智能。它为共享同一
 工作空间的多条机械臂计算无碰撞轨迹，并针对速度、能效和平滑运动进行优化。
@@ -57,12 +70,21 @@
 * 📐 **单智能体 3D 路径搜索（今天真实）：** 在一个静态球体障碍场景上进行的真实、经过测试的 RRT 搜索（`src/rrt.rs`）——每一条返回的路径都在测试中被验证为真正无障碍。同时为 32+ 台机器人做同步规划是集群规模的目标，尚未实现——见下面的"架构与设计决策"。
 * 🛡️ **针对变化障碍物的路径复检（今天真实）：** `validate` 子命令（`src/validate.rs`）在不重新搜索的情况下，将一条已计算出的路径对照场景当前的障碍物/工作空间重新检查。由新检测到的障碍物自动触发的实时重新规划尚未实现——目前它是调用者显式执行的一个独立命令。
 * ⚡ **确定性、受挂钟时间约束的搜索（今天真实）：** 一个真实的单线程 Rust 实现（本仓库中完全没有 C++），带有真实的 `PlannerConfig.max_duration_ms` 截止时间，独立于 `max_iterations`。这段代码中没有任何并行性，也没有任何实测的亚 50ms 基准——那类性能说法描述的是未来目标。
-* 🔄 **JSON 场景格式（今天真实）：** 一个场景就是一个普通的 JSON 文件（`start`/`goal`/`obstacles`/`workspace`/`config`，见下面的"构建与运行"）。本仓库中没有任何 G-Code 或 URDF 解析器——那是 HYDRA-UMC-TWIN 自己的事，不是这个规划器的。
+* 🔄 **JSON 场景格式（今天真实）：** 一个场景就是一个普通的 JSON 文件（`start`/`goal`/`obstacles`/`workspace`/`config`，见下面的"构建与发布"）。本仓库中没有任何 G-Code 或 URDF 解析器——那是 HYDRA-UMC-TWIN 自己的事，不是这个规划器的。
 * 🧱 **对检查内容保持诚实（今天已实现）：** 工作空间是整个机身必须停留的体积，因此起点、目标、采样点和路径点必须与其墙面保持 `robot_radius` 的距离（比机器人更窄的工作空间会被拒绝）；`validate` 还要求路径从场景的 `start` 开始、在其 `goal` 结束（误差 1e-6 以内），所以来自其他位姿的缓存路径或单个路径点不再是“安全”的；`config` 可以只列出要改动的字段；`max_iterations` 上限为 10,000,000；最近邻树在增长时会被均衡重建并且无需递归遍历，因此很长的直线走廊不会使栈溢出；stdout 只输出 JSON 结果（标识行输出到 stderr）。
 
----
+## 🧩 在 HYDRA-UMC 中的角色
 
-## 2. 🔄 规划工作流
+**HYDRA-UMC-PATH-PLANNER-3D** 在由球形障碍物构成的场景中为一台机器人规划无碰撞路径（RRT 搜索），并对照障碍物和工作空间边界检查路径。它是 Rust 库兼命令行工具；目前还不能同时为多台机器人规划。
+
+## 🏛️ 架构
+
+<p align="center">
+  <img src="images/architecture.svg" alt="HYDRA-UMC-PATH-PLANNER-3D architecture" width="100%">
+</p>
+
+<details>
+<summary>图表的文本版本（Mermaid）</summary>
 
 ```mermaid
 flowchart TB
@@ -74,11 +96,13 @@ flowchart TB
     OPT -.-> SYNC["SWARM-SYNC Dispatch"]
 ```
 
+</details>
+
+### 规划工作流
+
 > 虚线箭头仅为计划，尚未实现：规划器不读取占用数据或机器人约束，没有轨迹优化器，也不与 SWARM-SYNC 通信。它只在静态球体集合中为单个智能体规划路径。
 
----
-
-## 3. 🧱 架构与设计决策
+### 架构与设计决策
 
 * **为何 3D 无碰撞规划是独立的服务。** 在实时 3D 场景（单元内的每个机器人、工具和障碍物）上进行路径搜索，其对 CPU 的消耗和对延迟的敏感度与任务调度本身截然不同——将其隔离出来，意味着一次缓慢的规划查询永远不会阻塞 HYDRA-UMC-JOB-DISPATCHER 分配其他工作。
 * **与 HYDRA-UMC-TWIN 的验证是计划中的，尚未完成。** HYDRA-UMC-TWIN 目前只读取项目清单：它没有物理或仿真，因此在规划路径送往真实机械臂之前，没有任何东西检查扭矩极限或奇异点。`validate` 只检查障碍物、工作空间和路径的两端，仅此而已。
@@ -89,52 +113,23 @@ flowchart TB
 * **为何 `max_duration_ms` 是一次真实时钟检查，而不仅仅是更低的 `max_iterations`。** 单靠迭代次数无法限制真实时间：障碍物更密集的场景会让每次迭代的碰撞检测成比例地变慢，因此同样的迭代预算在一个病态场景和一个开阔场景上耗费的真实时间可能天差地别。处于实时控制循环中的规划器调用需要一个真正的时间预算，而不是它的替代品。
 * **为何 `validate` 是一个新的子命令，而不是修改 `plan()` 的返回值。** `rrt::plan()` 已经只会返回按构造就无碰撞的路径——那里没有需要弥补的缺口。`validate_path()`/`validate` 子命令是为了处理并非来自本进程内一次全新 `plan()` 调用的路径：一条缓存/重放的路径、一条从另一个进程转发来的路径、一个手工编辑过的场景——这些情况下障碍物集合可能在路径计算完成后发生了变化。这与整个生态系统中使用的模式相同：在不变的底层原语旁边添加一个受保护的新入口点。
 
----
+## 🚀 快速开始
 
-## 📂 目录结构
+需要稳定版 Rust 工具链（2021 版）及 `cargo`。
 
-```text
-HYDRA-UMC-PATH-PLANNER-3D/
-├── src/
-│   ├── main.rs       # CLI 入口点：加载场景、规划、打印 JSON
-│   ├── geometry.rs   # Vec3——所需的最小 3D 向量数学
-│   ├── obstacle.rs   # 球形障碍物 + 线段/点碰撞检测
-│   ├── rng.rs        # 无依赖的确定性 PRNG（xorshift64*）
-│   ├── rrt.rs        # 真正的规划器：RRT 搜索、Workspace、PlannerConfig
-│   ├── validate.rs   # 对已计算路径的真实安全性复核
-│   ├── kdtree.rs     # 用于最近邻查找的增量 KD 树（增长时均衡重建）
-│   ├── shrink.rs     # 将使规划器无法通过自身验证器的场景最小化
-│   ├── semantics.rs  # 共享语义门：在任何几何检查之前拒绝无效场景
-│   └── corpus.rs     # 仅用于测试：rrt.rs 和 validate.rs 自身测试共享的
-│                        可复用障碍物/工作空间场景集
-├── tests/        # cli_contract.rs: 命令行契约 (stdout 只有 JSON 结果,部分配置使用默认值,路径从起点开始、在目标结束)
-├── scenarios/        # 示例 JSON 场景（见下方"构建与运行"）
-├── docs/
-│   └── CLI_REFERENCE.md  # 命令行参数参考
-├── images/           # 媒体与图示
-├── tools/
-│   ├── build_test.py     # 不递增版本号的构建检查
-│   ├── ci_validate.py   # CI 使用的 manifest/CHANGELOG/docs 校验
-│   ├── _doc_policy.py   # 家族共享的文档规则 (HYDRA-UMC-SDK 的副本,保持同步)
-│   ├── _readme_parity.py # 检查八个 README 结构一致 (HYDRA-UMC-SDK 的副本,保持同步)
-│   └── hydra_project_tool.py # 每个仓库相同的命令: validate、test、ci、version、status、bump
-├── build/            # 编译后的二进制文件（build.sh/build.bat 的输出）
-├── mejoras_futuras.txt  # 完整、诚实地列出哪些内容被有意推迟及原因
-├── Cargo.toml        # Rust 包清单（名称、版本、依赖项）
-├── bump_version.py   # 里程表式版本递增（仅由显式 `bump` 命令运行）
-├── bump_manifest_version.py  # 将 hydra-umc.project.json 的版本与原生版本同步（--sync）
-├── build.sh/.bat     # 然后执行 `cargo build --release`
-├── run.sh/.bat       # 运行编译后的二进制文件
-└── README.md
+```bash
+./build.sh  # Linux, macOS (build.bat on Windows)
+./run.sh scenarios/example.json
+cargo test
 ```
 
-从原始模板中省略：`hardware/`、`firmware/`、`os/`——这是一个纯软件
-服务（Rust 二进制文件），没有专属硬件或固件，也没有需要维护的操作系统
-镜像。
+## 🧪 测试
 
----
+运行 `cargo test` 会执行 66 个自动测试。 不需要硬件，也不需要这台机器以外的任何东西。
 
-## 🔧 构建与运行
+CI 运行 `HYDRA_UMC_CI=1 python tools/ci_validate.py`，检查清单、文档、八个 README 和图片。
+
+## 🏗️ 构建与发布
 
 真正的无碰撞路径搜索，而不只是一个能编译的骨架：它会根据 JSON
 场景文件规划一条路线并打印结果。
@@ -182,15 +177,60 @@ cargo test   # 几何学 + 障碍物碰撞数学、PRNG、RRT 规划器本身
              # 安全性复核——共 66 个测试
 ```
 
----
+## 📂 仓库结构
 
-## 🚀 路线图
+<p align="center">
+  <img src="images/repository-structure.svg" alt="Repository structure of HYDRA-UMC-PATH-PLANNER-3D" width="100%">
+</p>
+
+<details>
+<summary>目录树的文本版本</summary>
+
+```text
+HYDRA-UMC-PATH-PLANNER-3D/
+├── src/                       源代码
+│   ├── main.rs                CLI 入口点：加载场景、规划、打印 JSON
+│   ├── geometry.rs            Vec3——所需的最小 3D 向量数学
+│   ├── obstacle.rs            球形障碍物 + 线段/点碰撞检测
+│   ├── rng.rs                 无依赖的确定性 PRNG（xorshift64*）
+│   ├── rrt.rs                 真正的规划器：RRT 搜索、Workspace、PlannerConfig
+│   ├── validate.rs            对已计算路径的真实安全性复核
+│   ├── kdtree.rs              用于最近邻查找的增量 KD 树（增长时均衡重建）
+│   ├── shrink.rs              将使规划器无法通过自身验证器的场景最小化
+│   ├── semantics.rs           共享语义门：在任何几何检查之前拒绝无效场景
+│   └── corpus.rs              仅用于测试：rrt.rs 和 validate.rs 自身测试共享的
+├── tests/                     cli_contract.rs: 命令行契约 (stdout 只有 JSON 结果,部分配置使用默认值,路径从起点开始、在目标结束)
+├── scenarios/                 示例 JSON 场景
+├── docs/                      项目文档
+├── images/                    媒体与图示
+├── tools/                     项目工具和 CI 检查
+├── .github/                   CI 工作流和 Issue 模板
+├── mejoras_futuras.txt        完整、诚实地列出哪些内容被有意推迟及原因
+├── Cargo.toml                 Rust 包清单（名称、版本、依赖项）
+├── bump_version.py            显式提升版本
+├── bump_manifest_version.py   将 hydra-umc.project.json 的版本与原生版本同步（--sync）
+├── CHANGELOG.md               每个版本的变更
+├── build-test.sh              不修改内容的构建检查
+├── build.sh                   构建并检查；从不改变版本
+├── hydra-umc.project.json     清单：版本、成熟度、系列
+├── run.sh                     启动程序
+└── test.sh                    运行测试
+```
+
+</details>
+
+## 🗺️ 路线图与已知限制
+
+**当前已知限制**
+
 * **第一阶段：** 基于 TSN 的确定性集群同步与亚毫秒级抖动降低。
 * **第二阶段：** 多机器人单元中带动态避障的 3D 路径规划。
 * **第三阶段：** 利用实时资源可用性进行多机器人任务分发优化。
 * **第四阶段：** 支持非完整约束移动底盘（JuanenBOT）的路径规划以及异构车队集成。
 
----
+## 🌍 语言
+
+本 README 和仓库文档提供八种语言：英语、西班牙语、德语、法语、意大利语、日语、中文和葡萄牙语（葡萄牙）。它们同时编写，并由 CI 检查八个文件拥有相同的章节和相同的链接。 本仓库没有自己的界面或消息目录，因此没有需要翻译的界面文字。
 
 ## 🔗 相关项目
 
@@ -283,21 +323,26 @@ cargo test   # 几何学 + 障碍物碰撞数学、PRNG、RRT 规划器本身
 - **[HYDRA-UMC-OPS-AGENT](https://github.com/JuanenRac/HYDRA-UMC-OPS-AGENT)** — 维护事件协调器：一个低权限的边缘角色采集经过脱敏的库存/健康快照，一个控制面角色以只读方式渲染它，并请求某个 AI 提供方给出诊断建议——从不应用补丁，也从不部署任何内容。
 - **[HYDRA-UMC-DEV-SERVER](https://github.com/JuanenRac/HYDRA-UMC-DEV-SERVER)** — 可复现的开发主机（Raspberry Pi 5 / CM5），保存整个生态系统的源代码，并在持久队列下运行有界的构建/测试任务；这是专用的开发角色，明确区别于运行中的 CM5。
 
+## 📚 文档
 
----
+更多阅读：
 
-## 📚 文档与社区
+* [生态系统的安全基线](https://github.com/JuanenRac/HYDRA-UMC-DOCS/blob/main/docs/SECURITY_BASELINE.md)
+* [生态系统的威胁模型](https://github.com/JuanenRac/HYDRA-UMC-DOCS/blob/main/docs/THREAT_MODEL.md)
+* [本仓库的更新日志](CHANGELOG.md)
+* [本仓库的许可证](LICENSE.md)
 
-- **[CONTRIBUTING.md](CONTRIBUTING.md)** —— 提交 Pull Request 所需的技术栈和编码规范。
-- **[CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md)** —— 本社区所期望的行为准则。
-- **[SECURITY.md](SECURITY.md)** —— 如何报告漏洞，以及本项目真实的安全关注重点。
-- **[SUPPORT.md](SUPPORT.md)** —— 在哪里提问和报告缺陷。
-- **[LICENSE.md](LICENSE.md)** —— 本项目自身的许可证。
+## 🤝 参与贡献与社区
+
+* 提交 pull request 之前，请运行 `HYDRA_UMC_CI=1 py -3 tools/ci_validate.py`（或 `HYDRA_UMC_CI=1 python3 tools/ci_validate.py`）：它必须输出 `CI_VALIDATION=PASS`。此检查不要运行 `build.sh` 或 `build.bat`；构建不是检查。
+* 八个 README 由 HYDRA-UMC-DOCS 中的同一个源生成；请勿手工编辑。修改源文件，再用 `tools/make_readmes.py` 重新生成。
+* 不要在 README 中声称尚未运行过的内容：属实时请写“仅模拟”或“尚未在硬件上试过”。
+* 请参阅 [CONTRIBUTING.md](CONTRIBUTING.md)、[行为准则](CODE_OF_CONDUCT.md)、[SECURITY.md](SECURITY.md) 和 [SUPPORT.md](SUPPORT.md)。
 
 ## 👤 作者
-**JuanenRac** (Electro Hobby 3D)
-📧 electrohobby3d@gmail.com
-📺 [youtube.com/@electrohobby3d](https://youtube.com/@electrohobby3d)
+
+**JuanenRac (Electro Hobby 3D)** · electrohobby3d@gmail.com
 
 ## 📜 许可证
-GPL-3.0-or-later —— 详见 LICENSE。
+
+GPL-3.0-or-later - [LICENSE](LICENSE).

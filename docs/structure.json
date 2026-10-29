@@ -1,0 +1,612 @@
+{
+  "repo": "HYDRA-UMC-PATH-PLANNER-3D",
+  "ecosystem": "hydra",
+  "svg": "en",
+  "exempt": [
+    "CODE_OF_CONDUCT.md",
+    "CONTRIBUTING.md",
+    "SECURITY.md",
+    "SUPPORT.md",
+    "LICENSE",
+    "LICENSE.md",
+    "Cargo.lock",
+    "build-test.bat",
+    "build.bat",
+    "run.bat",
+    "test.bat"
+  ],
+  "cards": [
+    {
+      "name": "src/",
+      "span": 3,
+      "accent": "a",
+      "rows": [
+        {
+          "name": "main.rs",
+          "desc": {
+            "en": "CLI entry point",
+            "es": "Punto de entrada CLI",
+            "de": "CLI-Einstiegspunkt",
+            "fr": "Point d'entrée CLI",
+            "it": "Punto di ingresso CLI",
+            "ja": "CLI エントリポイント：シナリオを読み込み",
+            "zh": "CLI 入口点：加载场景、规划、打印 JSO",
+            "pt": "Ponto de entrada da CLI"
+          },
+          "tree_desc": {
+            "en": "CLI entry point: loads a scenario, plans, prints JSON",
+            "es": "Punto de entrada CLI: carga un escenario, planifica, imprime JSON",
+            "de": "CLI-Einstiegspunkt: lädt ein Szenario, plant, gibt JSON aus",
+            "fr": "Point d'entrée CLI : charge un scénario, planifie, imprime le JSON",
+            "it": "Punto di ingresso CLI: carica uno scenario, pianifica, stampa JSON",
+            "ja": "CLI エントリポイント：シナリオを読み込み、計画し、JSON を出力",
+            "zh": "CLI 入口点：加载场景、规划、打印 JSON",
+            "pt": "Ponto de entrada da CLI: carrega um cenário, planeia, imprime JSON"
+          }
+        },
+        {
+          "name": "geometry.rs",
+          "desc": {
+            "en": "Vec3 - the minimal 3D vector math the rest",
+            "es": "Vec3 - el algebra vectorial 3D minima que",
+            "de": "Vec3 - die minimale 3D-Vektormathematik",
+            "fr": "Vec3 - l'algèbre vectorielle 3D minimale",
+            "it": "Vec3 - l'algebra vettoriale 3D minima",
+            "ja": "Vec3 - 必要最小限の 3D ベクトル演",
+            "zh": "Vec3——所需的最小 3D 向量数学",
+            "pt": "Vec3 - a matemática vetorial 3D mínima de"
+          },
+          "tree_desc": {
+            "en": "Vec3 - the minimal 3D vector math the rest needs",
+            "es": "Vec3 - el algebra vectorial 3D minima que hace falta",
+            "de": "Vec3 - die minimale 3D-Vektormathematik, die es braucht",
+            "fr": "Vec3 - l'algèbre vectorielle 3D minimale nécessaire",
+            "it": "Vec3 - l'algebra vettoriale 3D minima necessaria",
+            "ja": "Vec3 - 必要最小限の 3D ベクトル演算",
+            "zh": "Vec3——所需的最小 3D 向量数学",
+            "pt": "Vec3 - a matemática vetorial 3D mínima de que o resto precisa"
+          }
+        },
+        {
+          "name": "obstacle.rs",
+          "desc": {
+            "en": "Sphere obstacles + segment/point collision",
+            "es": "Obstaculos esfericos + comprobaciones de",
+            "de": "Kugelhindernisse + Kollisionsprüfungen",
+            "fr": "Obstacles sphériques + vérifications de",
+            "it": "Ostacoli sferici + controlli di collisione",
+            "ja": "球形障害物 + 衝突判定",
+            "zh": "球形障碍物 + 线段/点碰撞检测",
+            "pt": "Obstáculos esféricos + verificações de"
+          },
+          "tree_desc": {
+            "en": "Sphere obstacles + segment/point collision checks",
+            "es": "Obstaculos esfericos + comprobaciones de colision",
+            "de": "Kugelhindernisse + Kollisionsprüfungen",
+            "fr": "Obstacles sphériques + vérifications de collision",
+            "it": "Ostacoli sferici + controlli di collisione",
+            "ja": "球形障害物 + 衝突判定",
+            "zh": "球形障碍物 + 线段/点碰撞检测",
+            "pt": "Obstáculos esféricos + verificações de colisão de segmento/ponto"
+          }
+        },
+        {
+          "name": "rng.rs",
+          "desc": {
+            "en": "Deterministic dependency-free PRNG",
+            "es": "PRNG determinista sin dependencias",
+            "de": "Deterministischer, abhängigkeitsfreier PRNG",
+            "fr": "PRNG déterministe sans dépendance",
+            "it": "PRNG deterministico senza dipendenze",
+            "ja": "依存関係のない決定論的 PRNG(xorsh",
+            "zh": "无依赖的确定性 PRNG（xorshift6",
+            "pt": "PRNG determinista sem dependências"
+          },
+          "tree_desc": {
+            "en": "Deterministic dependency-free PRNG (xorshift64*)",
+            "es": "PRNG determinista sin dependencias (xorshift64*)",
+            "de": "Deterministischer, abhängigkeitsfreier PRNG (xorshift64*)",
+            "fr": "PRNG déterministe sans dépendance (xorshift64*)",
+            "it": "PRNG deterministico senza dipendenze (xorshift64*)",
+            "ja": "依存関係のない決定論的 PRNG(xorshift64*)",
+            "zh": "无依赖的确定性 PRNG（xorshift64*）",
+            "pt": "PRNG determinista sem dependências (xorshift64*)"
+          }
+        },
+        {
+          "name": "rrt.rs",
+          "desc": {
+            "en": "The real planner",
+            "es": "El planificador real",
+            "de": "Der echte Planer",
+            "fr": "Le véritable planificateur",
+            "it": "Il vero pianificatore",
+            "ja": "実際のプランナー：RRT 探索",
+            "zh": "真正的规划器：RRT 搜索、Workspac",
+            "pt": "O planeador real"
+          },
+          "tree_desc": {
+            "en": "The real planner: RRT search, Workspace, PlannerConfig",
+            "es": "El planificador real: busqueda RRT, Workspace, PlannerConfig",
+            "de": "Der echte Planer: RRT-Suche, Workspace, PlannerConfig",
+            "fr": "Le véritable planificateur : recherche RRT, Workspace, PlannerConfig",
+            "it": "Il vero pianificatore: ricerca RRT, Workspace, PlannerConfig",
+            "ja": "実際のプランナー：RRT 探索、Workspace、PlannerConfig",
+            "zh": "真正的规划器：RRT 搜索、Workspace、PlannerConfig",
+            "pt": "O planeador real: pesquisa RRT, Workspace, PlannerConfig"
+          }
+        },
+        {
+          "name": "validate.rs",
+          "desc": {
+            "en": "Real safety re-check of an already-computed",
+            "es": "Revalidacion real de seguridad de una ruta",
+            "de": "Echte Sicherheitsnachprüfung eines bereits",
+            "fr": "Revérification réelle de sécurité d'une",
+            "it": "Riverifica reale di sicurezza di un",
+            "ja": "既に計算済みの経路に対する実際の安全性再チェ",
+            "zh": "对已计算路径的真实安全性复核",
+            "pt": "Nova verificação de segurança real de um"
+          },
+          "tree_desc": {
+            "en": "Real safety re-check of an already-computed path",
+            "es": "Revalidacion real de seguridad de una ruta ya calculada",
+            "de": "Echte Sicherheitsnachprüfung eines bereits berechneten Pfades",
+            "fr": "Revérification réelle de sécurité d'une trajectoire déjà calculée",
+            "it": "Riverifica reale di sicurezza di un percorso già calcolato",
+            "ja": "既に計算済みの経路に対する実際の安全性再チェック",
+            "zh": "对已计算路径的真实安全性复核",
+            "pt": "Nova verificação de segurança real de um caminho já calculado"
+          }
+        },
+        {
+          "name": "kdtree.rs",
+          "desc": {
+            "en": "Incremental KD-tree",
+            "es": "KD-tree incremental",
+            "de": "Inkrementeller KD-Baum",
+            "fr": "KD-tree incrémental",
+            "it": "KD-tree incrementale",
+            "ja": "最近傍探索用の増分 KD ツリー",
+            "zh": "用于最近邻查找的增量 KD 树",
+            "pt": "KD-tree incremental"
+          },
+          "tree_desc": {
+            "en": "Incremental KD-tree (balanced as it grows) for the nearest-neighbour lookup",
+            "es": "KD-tree incremental (equilibrado al crecer) para el vecino más cercano",
+            "de": "Inkrementeller KD-Baum (beim Wachsen ausgewogen) für den nächsten Nachbarn",
+            "fr": "KD-tree incrémental (équilibré en grandissant) pour le plus proche voisin",
+            "it": "KD-tree incrementale (bilanciato mentre cresce) per il vicino più prossimo",
+            "ja": "最近傍探索用の増分 KD ツリー（成長時にバランス再構築）",
+            "zh": "用于最近邻查找的增量 KD 树（增长时均衡重建）",
+            "pt": "KD-tree incremental (equilibrada ao crescer) para o vizinho mais próximo"
+          }
+        },
+        {
+          "name": "shrink.rs",
+          "desc": {
+            "en": "Minimises a scenario that makes the planner",
+            "es": "Reduce un escenario que hace fallar al",
+            "de": "Verkleinert ein Szenario",
+            "fr": "Réduit un scénario qui fait échouer le",
+            "it": "Riduce uno scenario che fa fallire il",
+            "ja": "プランナーが自身のバリデーターで失敗するシナ",
+            "zh": "将使规划器无法通过自身验证器的场景最小化",
+            "pt": "Reduz um cenário que faz o planeador falhar"
+          },
+          "tree_desc": {
+            "en": "Minimises a scenario that makes the planner fail its own validator",
+            "es": "Reduce un escenario que hace fallar al planificador en su propio validador",
+            "de": "Verkleinert ein Szenario, das den Planer an seinem eigenen Validator scheitern lässt",
+            "fr": "Réduit un scénario qui fait échouer le planificateur sur son propre validateur",
+            "it": "Riduce uno scenario che fa fallire il pianificatore sul proprio validatore",
+            "ja": "プランナーが自身のバリデーターで失敗するシナリオを最小化する",
+            "zh": "将使规划器无法通过自身验证器的场景最小化",
+            "pt": "Reduz um cenário que faz o planeador falhar no seu próprio validador"
+          }
+        },
+        {
+          "name": "semantics.rs",
+          "desc": {
+            "en": "Shared semantic gate",
+            "es": "Puerta semantica compartida",
+            "de": "Gemeinsames semantisches Gate",
+            "fr": "Porte semantique partagee",
+            "it": "Gate semantico condiviso",
+            "ja": "共有セマンティックゲート：ジオメトリチェック",
+            "zh": "共享语义门：在任何几何检查之前拒绝无效场景",
+            "pt": "Porta semântica partilhada"
+          },
+          "tree_desc": {
+            "en": "Shared semantic gate: rejects an invalid scenario before any geometry check",
+            "es": "Puerta semantica compartida: rechaza un escenario invalido antes de cualquier comprobacion geometrica",
+            "de": "Gemeinsames semantisches Gate: weist ein ungueltiges Szenario vor jeder Geometriepruefung ab",
+            "fr": "Porte semantique partagee : rejette un scenario invalide avant toute verification geometrique",
+            "it": "Gate semantico condiviso: rifiuta uno scenario non valido prima di qualsiasi controllo geometrico",
+            "ja": "共有セマンティックゲート：ジオメトリチェックの前に無効なシナリオを拒否する",
+            "zh": "共享语义门：在任何几何检查之前拒绝无效场景",
+            "pt": "Porta semântica partilhada: rejeita um cenário inválido antes de qualquer verificação geométrica"
+          }
+        },
+        {
+          "name": "corpus.rs",
+          "desc": {
+            "en": "Test-only: reusable obstacle/workspace",
+            "es": "Solo para tests",
+            "de": "Nur für Tests: wiederverwendbare",
+            "fr": "Tests uniquement",
+            "it": "Solo per i test",
+            "ja": "テスト専用：rrt.rs と validat",
+            "zh": "仅用于测试：rrt.rs 和 validat",
+            "pt": "Só para testes"
+          },
+          "tree_desc": {
+            "en": "Test-only: reusable obstacle/workspace scenario fixtures",
+            "es": "Solo para tests: fixtures reutilizables de escenarios",
+            "de": "Nur für Tests: wiederverwendbare Hindernis-/Workspace-Szenario-",
+            "fr": "Tests uniquement : jeux de scénarios obstacle/workspace",
+            "it": "Solo per i test: fixture riutilizzabili di scenari",
+            "ja": "テスト専用：rrt.rs と validate.rs 自身のテストが共有する",
+            "zh": "仅用于测试：rrt.rs 和 validate.rs 自身测试共享的",
+            "pt": "Só para testes: fixtures reutilizáveis de cenários de obstáculos/espaço de trabalho"
+          }
+        }
+      ],
+      "tree_head": {
+        "en": "source code",
+        "es": "código fuente",
+        "de": "Quellcode",
+        "fr": "code source",
+        "it": "codice sorgente",
+        "ja": "ソースコード",
+        "zh": "源代码",
+        "pt": "código-fonte"
+      },
+      "sub": {
+        "en": "source code",
+        "es": "código fuente",
+        "de": "Quellcode",
+        "fr": "code source",
+        "it": "codice sorgente",
+        "ja": "ソースコード",
+        "zh": "源代码",
+        "pt": "código-fonte"
+      },
+      "columns": 2
+    },
+    {
+      "name": {
+        "en": "folders",
+        "es": "carpetas",
+        "de": "Ordner",
+        "fr": "dossiers",
+        "it": "cartelle",
+        "ja": "フォルダ",
+        "zh": "文件夹",
+        "pt": "pastas"
+      },
+      "kind": "group",
+      "span": 3,
+      "accent": "b",
+      "columns": 2,
+      "rows": [
+        {
+          "name": "tests/",
+          "desc": {
+            "en": "cli_contract.rs: the command-line contract",
+            "es": "cli_contract.rs",
+            "de": "cli_contract.rs",
+            "fr": "cli_contract.rs",
+            "it": "cli_contract.rs",
+            "ja": "cli_contract.rs",
+            "zh": "cli_contract.rs: 命令行契约",
+            "pt": "cli_contract.rs"
+          },
+          "tree_desc": {
+            "en": "cli_contract.rs: the command-line contract (stdout is only the JSON result, a partial config uses defaults, a path starts at the start and ends at the goal)",
+            "es": "cli_contract.rs: el contrato de la línea de órdenes (la salida es solo el resultado JSON, una configuración parcial usa valores por defecto, un camino empieza en el inicio y acaba en la meta)",
+            "de": "cli_contract.rs: der Vertrag der Kommandozeile (stdout ist nur das JSON-Ergebnis, eine Teilkonfiguration nutzt Standardwerte, ein Pfad beginnt am Start und endet am Ziel)",
+            "fr": "cli_contract.rs : le contrat de la ligne de commande (stdout n'est que le résultat JSON, une configuration partielle utilise les valeurs par défaut, un chemin commence au départ et finit à l'objectif)",
+            "it": "cli_contract.rs: il contratto della riga di comando (stdout è solo il risultato JSON, una configurazione parziale usa i valori predefiniti, un percorso inizia dalla partenza e finisce all'obiettivo)",
+            "ja": "cli_contract.rs: コマンドラインの契約 (stdout は JSON の結果のみ、部分的な設定は既定値を使う、経路は開始点で始まり目標で終わる)",
+            "zh": "cli_contract.rs: 命令行契约 (stdout 只有 JSON 结果,部分配置使用默认值,路径从起点开始、在目标结束)",
+            "pt": "cli_contract.rs: o contrato da linha de comandos (o stdout é só o resultado JSON, uma configuração parcial usa os valores por omissão, um caminho começa no início e acaba no objetivo)"
+          }
+        },
+        {
+          "name": "scenarios/",
+          "desc": {
+            "en": "example JSON scenarios",
+            "es": "escenarios JSON de ejemplo",
+            "de": "JSON-Beispielszenarien",
+            "fr": "scénarios JSON d'exemple",
+            "it": "scenari JSON di esempio",
+            "ja": "JSON シナリオの例",
+            "zh": "示例 JSON 场景",
+            "pt": "cenários JSON de exemplo"
+          },
+          "tree_desc": {
+            "en": "example JSON scenarios",
+            "es": "escenarios JSON de ejemplo",
+            "de": "JSON-Beispielszenarien",
+            "fr": "scénarios JSON d'exemple",
+            "it": "scenari JSON di esempio",
+            "ja": "JSON シナリオの例",
+            "zh": "示例 JSON 场景",
+            "pt": "cenários JSON de exemplo"
+          }
+        },
+        {
+          "name": "docs/",
+          "desc": {
+            "en": "documents of the project",
+            "es": "documentos del proyecto",
+            "de": "Dokumente des Projekts",
+            "fr": "documents du projet",
+            "it": "documenti del progetto",
+            "ja": "プロジェクトの文書",
+            "zh": "项目文档",
+            "pt": "documentos do projeto"
+          },
+          "tree_desc": {
+            "en": "documents of the project",
+            "es": "documentos del proyecto",
+            "de": "Dokumente des Projekts",
+            "fr": "documents du projet",
+            "it": "documenti del progetto",
+            "ja": "プロジェクトの文書",
+            "zh": "项目文档",
+            "pt": "documentos do projeto"
+          }
+        },
+        {
+          "name": "images/",
+          "desc": {
+            "en": "Media and diagrams",
+            "es": "Medios y diagramas",
+            "de": "Medien und Diagramme",
+            "fr": "Médias et diagrammes",
+            "it": "Media e diagrammi",
+            "ja": "メディアと図版",
+            "zh": "媒体与图示",
+            "pt": "Multimédia e diagramas"
+          },
+          "tree_desc": {
+            "en": "Media and diagrams",
+            "es": "Medios y diagramas",
+            "de": "Medien und Diagramme",
+            "fr": "Médias et diagrammes",
+            "it": "Media e diagrammi",
+            "ja": "メディアと図版",
+            "zh": "媒体与图示",
+            "pt": "Multimédia e diagramas"
+          }
+        },
+        {
+          "name": "tools/",
+          "desc": {
+            "en": "project tools and CI checks",
+            "es": "herramientas del proyecto y comprobaciones",
+            "de": "Projektwerkzeuge und CI-Prüfungen",
+            "fr": "outils du projet et vérifications de la CI",
+            "it": "strumenti del progetto e controlli della CI",
+            "ja": "プロジェクトのツールと CI の検査",
+            "zh": "项目工具和 CI 检查",
+            "pt": "ferramentas do projeto e verificações da CI"
+          },
+          "tree_desc": {
+            "en": "project tools and CI checks",
+            "es": "herramientas del proyecto y comprobaciones del CI",
+            "de": "Projektwerkzeuge und CI-Prüfungen",
+            "fr": "outils du projet et vérifications de la CI",
+            "it": "strumenti del progetto e controlli della CI",
+            "ja": "プロジェクトのツールと CI の検査",
+            "zh": "项目工具和 CI 检查",
+            "pt": "ferramentas do projeto e verificações da CI"
+          }
+        },
+        {
+          "name": ".github/",
+          "desc": {
+            "en": "CI workflow and issue templates",
+            "es": "flujo de CI y plantillas de incidencias",
+            "de": "CI-Workflow und Issue-Vorlagen",
+            "fr": "workflow de CI et modèles de tickets",
+            "it": "workflow di CI e modelli di segnalazione",
+            "ja": "CI ワークフローと Issue テンプレート",
+            "zh": "CI 工作流和 Issue 模板",
+            "pt": "fluxo de CI e modelos de problemas"
+          }
+        }
+      ]
+    },
+    {
+      "name": {
+        "en": "project files",
+        "es": "ficheros del proyecto",
+        "de": "Projektdateien",
+        "fr": "fichiers du projet",
+        "it": "file del progetto",
+        "ja": "プロジェクトのファイル",
+        "zh": "项目文件",
+        "pt": "ficheiros do projeto"
+      },
+      "kind": "group",
+      "span": 3,
+      "accent": "c",
+      "columns": 2,
+      "rows": [
+        {
+          "name": "mejoras_futuras.txt",
+          "desc": {
+            "en": "The complete, honest list of what's",
+            "es": "La lista completa y honesta de lo que queda",
+            "de": "Die vollständige",
+            "fr": "La liste complète et honnête de ce qui est",
+            "it": "L'elenco completo e onesto di ciò che è",
+            "ja": "意図的に後回しにした内容とその理由を完全にま",
+            "zh": "完整、诚实地列出哪些内容被有意推迟及原因",
+            "pt": "A lista completa e honesta do que foi"
+          },
+          "tree_desc": {
+            "en": "The complete, honest list of what's deliberately deferred and why",
+            "es": "La lista completa y honesta de lo que queda deliberadamente diferido, y por qué",
+            "de": "Die vollständige, ehrliche Liste dessen, was bewusst zurückgestellt wurde und warum",
+            "fr": "La liste complète et honnête de ce qui est délibérément reporté, et pourquoi",
+            "it": "L'elenco completo e onesto di ciò che è deliberatamente rimandato, e perché",
+            "ja": "意図的に後回しにした内容とその理由を完全にまとめた正直なリスト",
+            "zh": "完整、诚实地列出哪些内容被有意推迟及原因",
+            "pt": "A lista completa e honesta do que foi deliberadamente adiado e porquê"
+          }
+        },
+        {
+          "name": "Cargo.toml",
+          "desc": {
+            "en": "Rust package manifest (name, version, deps)",
+            "es": "Manifiesto del paquete Rust",
+            "de": "Rust-Paketmanifest",
+            "fr": "Manifeste du paquet Rust",
+            "it": "Manifesto del pacchetto Rust",
+            "ja": "Rust パッケージマニフェスト（名前",
+            "zh": "Rust 包清单（名称、版本、依赖项）",
+            "pt": "Manifesto do pacote Rust"
+          },
+          "tree_desc": {
+            "en": "Rust package manifest (name, version, deps)",
+            "es": "Manifiesto del paquete Rust (nombre, versión, deps)",
+            "de": "Rust-Paketmanifest (Name, Version, Abhängigkeiten)",
+            "fr": "Manifeste du paquet Rust (nom, version, dépendances)",
+            "it": "Manifesto del pacchetto Rust (nome, versione, dep)",
+            "ja": "Rust パッケージマニフェスト（名前、バージョン、依存関係）",
+            "zh": "Rust 包清单（名称、版本、依赖项）",
+            "pt": "Manifesto do pacote Rust (nome, versão, dependências)"
+          }
+        },
+        {
+          "name": "bump_version.py",
+          "desc": {
+            "en": "explicit version bump",
+            "es": "Incremento de versión tipo cuentakilómetros",
+            "de": "ausdrückliche Versionserhöhung",
+            "fr": "Incrément de version type compteur",
+            "it": "Incremento di versione stile contachilometri",
+            "ja": "明示的なバージョン更新",
+            "zh": "显式提升版本",
+            "pt": "Subida de versão ao estilo conta-quilómetros"
+          },
+          "tree_desc": {
+            "en": "explicit version bump",
+            "es": "Incremento de versión tipo cuentakilómetros (solo lo ejecuta el comando `bump` explícito)",
+            "de": "ausdrückliche Versionserhöhung",
+            "fr": "Incrément de version type compteur kilométrique (exécuté seulement par la commande `bump` explicite)",
+            "it": "Incremento di versione stile contachilometri (eseguito solo dal comando `bump` esplicito)",
+            "ja": "明示的なバージョン更新",
+            "zh": "显式提升版本",
+            "pt": "Subida de versão ao estilo conta-quilómetros (executada só pelo comando `bump` explícito)"
+          }
+        },
+        {
+          "name": "bump_manifest_version.py",
+          "desc": {
+            "en": "Syncs hydra-umc.project.json's version to",
+            "es": "Sincroniza la versión de",
+            "de": "Synchronisiert die Version von",
+            "fr": "Synchronise la version de",
+            "it": "Sincronizza la versione di",
+            "ja": "hydra-umc.project.json",
+            "zh": "将 hydra-umc.project.js",
+            "pt": "Sincroniza a versão do"
+          },
+          "tree_desc": {
+            "en": "Syncs hydra-umc.project.json's version to the native one (--sync)",
+            "es": "Sincroniza la versión de hydra-umc.project.json con la nativa (--sync)",
+            "de": "Synchronisiert die Version von hydra-umc.project.json mit der nativen (--sync)",
+            "fr": "Synchronise la version de hydra-umc.project.json avec la version native (--sync)",
+            "it": "Sincronizza la versione di hydra-umc.project.json con quella nativa (--sync)",
+            "ja": "hydra-umc.project.json のバージョンをネイティブ側と同期（--sync）",
+            "zh": "将 hydra-umc.project.json 的版本与原生版本同步（--sync）",
+            "pt": "Sincroniza a versão do hydra-umc.project.json com a nativa (--sync)"
+          }
+        },
+        {
+          "name": "CHANGELOG.md",
+          "desc": {
+            "en": "what changed in each version",
+            "es": "qué cambió en cada versión",
+            "de": "was sich in jeder Version geändert hat",
+            "fr": "ce qui a changé à chaque version",
+            "it": "cosa è cambiato in ogni versione",
+            "ja": "各バージョンの変更点",
+            "zh": "每个版本的变更",
+            "pt": "o que mudou em cada versão"
+          }
+        },
+        {
+          "name": "build-test.sh",
+          "desc": {
+            "en": "non-mutating build check",
+            "es": "comprobación de compilación sin cambios",
+            "de": "Build-Prüfung ohne Änderungen",
+            "fr": "vérification de build sans modification",
+            "it": "controllo di build senza modifiche",
+            "ja": "変更を伴わないビルド確認",
+            "zh": "不修改内容的构建检查",
+            "pt": "verificação de compilação sem alterações"
+          }
+        },
+        {
+          "name": "build.sh",
+          "desc": {
+            "en": "builds and checks; never changes the version",
+            "es": "compila y comprueba; nunca cambia la versión",
+            "de": "baut und prüft; ändert nie die Version",
+            "fr": "construit et vérifie ; ne change jamais la version",
+            "it": "compila e controlla; non cambia mai la versione",
+            "ja": "ビルドと検査。バージョンは変更しない",
+            "zh": "构建并检查；从不改变版本",
+            "pt": "compila e verifica; nunca muda a versão"
+          }
+        },
+        {
+          "name": "hydra-umc.project.json",
+          "desc": {
+            "en": "manifest: version, maturity, family",
+            "es": "manifiesto: versión, madurez, familia",
+            "de": "Manifest: Version, Reifegrad, Familie",
+            "fr": "manifeste : version, maturité, famille",
+            "it": "manifesto: versione, maturità, famiglia",
+            "ja": "マニフェスト：バージョン、成熟度、ファミリー",
+            "zh": "清单：版本、成熟度、系列",
+            "pt": "manifesto: versão, maturidade, família"
+          }
+        },
+        {
+          "name": "run.sh",
+          "desc": {
+            "en": "starts the program",
+            "es": "arranca el programa",
+            "de": "startet das Programm",
+            "fr": "démarre le programme",
+            "it": "avvia il programma",
+            "ja": "プログラムを起動",
+            "zh": "启动程序",
+            "pt": "arranca o programa"
+          }
+        },
+        {
+          "name": "test.sh",
+          "desc": {
+            "en": "runs the tests",
+            "es": "ejecuta las pruebas",
+            "de": "führt die Tests aus",
+            "fr": "lance les tests",
+            "it": "esegue i test",
+            "ja": "テストを実行",
+            "zh": "运行测试",
+            "pt": "executa os testes"
+          }
+        }
+      ]
+    }
+  ]
+}

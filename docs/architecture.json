@@ -1,0 +1,118 @@
+{
+  "repo": "HYDRA-UMC-PATH-PLANNER-3D",
+  "ecosystem": "hydra",
+  "tagline": "A seeded RRT search and an independent check of the path it returns.",
+  "description": "HYDRA-UMC-PATH-PLANNER-3D reads a JSON scenario, searches a path with a deterministic RRT over sphere obstacles, shrinks it and validates it against obstacles and workspace bounds.",
+  "columns": [
+    "WHO USES IT",
+    "THIS REPOSITORY",
+    "WHAT IT READS"
+  ],
+  "nodes": [
+    {
+      "id": "user",
+      "column": 0,
+      "level": "external",
+      "title": "People and scripts",
+      "lines": [
+        "run the CLI on a scenario",
+        "and read the JSON result"
+      ]
+    },
+    {
+      "id": "scn",
+      "column": 2,
+      "level": "config",
+      "title": "Scenario file",
+      "lines": [
+        "start, goal, spheres,",
+        "workspace, seed, config"
+      ],
+      "code": [
+        "scenarios"
+      ]
+    },
+    {
+      "id": "main",
+      "column": 1,
+      "level": "tested",
+      "title": "main.rs",
+      "lines": [
+        "command line and the",
+        "JSON result contract"
+      ],
+      "code": [
+        "src/main.rs"
+      ]
+    },
+    {
+      "id": "rrt",
+      "column": 1,
+      "level": "tested",
+      "title": "rrt.rs / kdtree.rs",
+      "lines": [
+        "seeded RRT search with a",
+        "k-d tree"
+      ],
+      "code": [
+        "src/rrt.rs",
+        "src/kdtree.rs"
+      ]
+    },
+    {
+      "id": "val",
+      "column": 1,
+      "level": "tested",
+      "title": "validate.rs",
+      "lines": [
+        "segments against obstacles",
+        "and workspace bounds"
+      ],
+      "code": [
+        "src/validate.rs",
+        "src/obstacle.rs"
+      ]
+    },
+    {
+      "id": "shr",
+      "column": 1,
+      "level": "tested",
+      "title": "shrink.rs",
+      "lines": [
+        "shortens the found path"
+      ],
+      "code": [
+        "src/shrink.rs"
+      ]
+    }
+  ],
+  "edges": [
+    {
+      "from": "user",
+      "to": "main",
+      "level": "tested"
+    },
+    {
+      "from": "main",
+      "to": "rrt",
+      "level": "tested"
+    },
+    {
+      "from": "rrt",
+      "to": "shr",
+      "level": "tested"
+    },
+    {
+      "from": "shr",
+      "to": "val",
+      "level": "tested"
+    },
+    {
+      "from": "main",
+      "to": "scn",
+      "level": "config",
+      "label": "reads"
+    }
+  ],
+  "footer": "One robot at a time; the occupancy data of the vision nodes is not wired in."
+}
