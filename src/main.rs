@@ -24,6 +24,8 @@ mod obstacle;
 mod rng;
 mod rrt;
 mod semantics;
+mod server;
+mod service_metrics;
 mod shrink;
 mod validate;
 
@@ -302,6 +304,11 @@ fn main() -> ExitCode {
 
     let args: Vec<String> = env::args().collect();
 
+    // serve is the only way the program listens on a network, and it is never started without being asked for.
+    if args.get(1).map(String::as_str) == Some("serve") {
+        return server::serve_command(&args[2..]);
+    }
+
     if args.get(1).map(String::as_str) == Some("validate") {
         let (Some(scenario_path), Some(path_path)) = (args.get(2), args.get(3)) else {
             eprintln!("Usage: hydra-umc-path-planner-3d validate <scenario.json> <path.json>");
@@ -338,6 +345,7 @@ fn main() -> ExitCode {
         eprintln!("Usage: hydra-umc-path-planner-3d <scenario.json>");
         eprintln!("       hydra-umc-path-planner-3d validate <scenario.json> <path.json>");
         eprintln!("       hydra-umc-path-planner-3d shrink <scenario.json> [--out <minimal.json>]");
+        eprintln!("       hydra-umc-path-planner-3d serve [--addr HOST:PORT] [--token TOKEN] [--allow-anonymous]   (off unless asked for; GET /health and GET /metrics only)");
         eprintln!("See scenarios/example.json for the expected format.");
         return ExitCode::SUCCESS; // printing identity and usage is a valid no-arg invocation, not a failure
     };

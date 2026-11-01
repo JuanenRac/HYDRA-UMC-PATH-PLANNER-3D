@@ -73,7 +73,7 @@ Il intègre les données d'occupation en temps réel des nœuds de vision et les
 
 ## 🧩 Rôle dans HYDRA-UMC
 
-**HYDRA-UMC-PATH-PLANNER-3D** planifie une trajectoire sans collision pour un robot à travers une scène d'obstacles sphériques (recherche RRT) et vérifie une trajectoire par rapport aux obstacles et aux limites de l'espace de travail. C'est une bibliothèque et un outil en ligne de commande en Rust ; il ne planifie pas encore pour plusieurs robots à la fois.
+**HYDRA-UMC-PATH-PLANNER-3D** planifie une trajectoire sans collision pour un robot à travers une scène d'obstacles sphériques (recherche RRT) et vérifie une trajectoire par rapport aux obstacles et aux limites de l'espace de travail. C'est une bibliothèque et un outil en ligne de commande en Rust ; il ne planifie pas encore pour plusieurs robots à la fois. La commande facultative `serve` démarre un petit serveur HTTP (désactivé sauf demande, en loopback seulement par défaut, jeton facultatif) qui ne répond qu'à `GET /health` et `GET /metrics` avec des chiffres sur le service ; il ne planifie rien.
 
 ## 🏛️ Architecture
 

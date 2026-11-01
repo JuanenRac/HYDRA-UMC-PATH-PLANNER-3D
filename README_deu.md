@@ -73,7 +73,7 @@ Es integriert Echtzeit-Belegungsdaten von den Vision-Knoten und kinematische Ein
 
 ## 🧩 Rolle in HYDRA-UMC
 
-**HYDRA-UMC-PATH-PLANNER-3D** plant einen kollisionsfreien Weg für einen Roboter durch eine Szene mit Kugelhindernissen (RRT-Suche) und prüft einen Weg gegen Hindernisse und Arbeitsraumgrenzen. Es ist eine Rust-Bibliothek und ein Kommandozeilenwerkzeug; für mehrere Roboter gleichzeitig plant es noch nicht.
+**HYDRA-UMC-PATH-PLANNER-3D** plant einen kollisionsfreien Weg für einen Roboter durch eine Szene mit Kugelhindernissen (RRT-Suche) und prüft einen Weg gegen Hindernisse und Arbeitsraumgrenzen. Es ist eine Rust-Bibliothek und ein Kommandozeilenwerkzeug; für mehrere Roboter gleichzeitig plant es noch nicht. Der optionale Befehl `serve` startet einen kleinen HTTP-Listener (aus, solange er nicht verlangt wird, standardmäßig nur Loopback, Token optional), der nur `GET /health` und `GET /metrics` mit Zahlen über den Dienst beantwortet; er plant nichts.
 
 ## 🏛️ Architektur
 
