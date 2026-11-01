@@ -10,6 +10,6 @@ We welcome contributions to the 3D path optimization engine of the HYDRA-UMC pla
 
 ## Guidelines
 1. **Performance First**: All path planning algorithms must be highly parallelized to keep generation time under 50ms.
-2. **Collision Safety**: Any new collision checking logic must be verified against the high-fidelity `HYDRA-UMC-TWIN` simulator.
+2. **Collision Safety**: Any new collision checking logic must come with tests of its own (`cargo test`) and pass `validate` on the example scenarios; HYDRA-UMC-TWIN does not check routes yet.
 3. **URDF Support**: Ensure that new features support standard URDF joint and link definitions.
 4. **Benchmarks**: Include performance benchmarks (latency and memory usage) when submitting algorithm improvements.

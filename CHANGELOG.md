@@ -4,6 +4,7 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+- **The documentation no longer says the twin validates the planned routes.** The related-projects entry, the ecosystem paragraph and the contributing guide said that routes are checked in the digital twin; nothing sends a route to the twin yet, and the text now says so.
 ## [0.1.2] - The test count out of the manifest notes and the universal README
 
 - **The notes of the project manifest no longer carry a hand-written test count:** the counts went out of date at every change; the number of tests is stated by the README, which is checked against the code.
