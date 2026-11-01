@@ -56,6 +56,9 @@ Cada línea es una parte de este repositorio y la luz dice hasta dónde llega ho
 | Software | 🟡 | Funciona para su propósito principal; la comprobación de honestidad de arriba lista lo que aún falta |
 | Pruebas | 🟢 | 75 pruebas automáticas, ejecutadas en cada cambio |
 | Hardware real | 🔴 | Todavía no: no consta ninguna ejecución en hardware real para esta versión |
+| Integración | 🟠 | Sus mensajes y rutas se comprueban contra los contratos compartidos del SDK; no ha funcionado junto con el equipo real |
+| Despliegue | 🟠 | Publicado como release; instalarlo en un equipo limpio está documentado pero no consta |
+| Planificación | 🟠 | El planificador funciona con escenas simuladas y objetivos de guion; nunca ha planificado para un robot real |
 | Documentación | 🟢 | README en ocho idiomas, comprobado contra el manifiesto en cada cambio |
 
 ## 🎯 Resumen

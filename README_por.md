@@ -56,6 +56,9 @@ Cada linha é uma parte deste repositório e a luz diz até onde chega hoje. É 
 | Software | 🟡 | Funciona para o seu propósito principal; a verificação de honestidade acima lista o que ainda falta |
 | Testes | 🟢 | 75 testes automáticos, executados a cada alteração |
 | Hardware real | 🔴 | Ainda não: não há registo de execução em hardware real para esta versão |
+| Integração | 🟠 | As suas mensagens e rotas são verificadas contra os contratos partilhados do SDK; ainda não funcionou em conjunto com o equipamento real |
+| Implantação | 🟠 | Publicado como release; instalá-lo numa máquina limpa está documentado mas não registado |
+| Planeamento | 🟠 | O planeador funciona com cenas simuladas e objetivos de guião; nunca planeou para um robô real |
 | Documentação | 🟢 | README em oito idiomas, verificado contra o manifesto a cada alteração |
 
 ## 🎯 Visão geral

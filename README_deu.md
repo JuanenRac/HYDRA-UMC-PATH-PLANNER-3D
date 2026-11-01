@@ -56,6 +56,9 @@ Jede Zeile ist ein Teil dieses Repositorys, und die Ampel sagt, wie weit er heut
 | Software | 🟡 | Funktioniert für seinen Hauptzweck; die Ehrlichkeitsprüfung oben nennt, was noch fehlt |
 | Tests | 🟢 | 75 automatische Tests, bei jeder Änderung ausgeführt |
 | Echte Hardware | 🔴 | Noch nicht: für diese Version ist kein Lauf auf echter Hardware vermerkt |
+| Integration | 🟠 | Seine Nachrichten und Routen werden gegen die gemeinsamen Verträge des SDK geprüft; es lief noch nicht zusammen mit der echten Ausrüstung |
+| Bereitstellung | 🟠 | Als Release veröffentlicht; die Installation auf einem frischen Rechner ist dokumentiert, aber nicht vermerkt |
+| Planung | 🟠 | Der Planer arbeitet mit simulierten Szenen und vorgegebenen Zielen; er hat nie für einen echten Roboter geplant |
 | Dokumentation | 🟢 | README in acht Sprachen, bei jeder Änderung gegen das Manifest geprüft |
 
 ## 🎯 Überblick
