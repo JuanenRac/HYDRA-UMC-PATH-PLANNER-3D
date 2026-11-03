@@ -18,14 +18,14 @@ GPL-3.0-or-later - see LICENSE
   <img src="https://img.shields.io/badge/License-GPL%203.0--or--later-blue.svg" alt="GPL 3.0 or later">
   <img src="https://img.shields.io/badge/Algorithm-RRT-orange.svg" alt="Algorithm">
   <img src="https://img.shields.io/badge/Engine-Rust-blue.svg" alt="Engine">
-  <img src="https://img.shields.io/badge/Tests-75%20passing-2ea44f.svg" alt="Tests">
+  <img src="https://img.shields.io/badge/Tests-83%20passing-2ea44f.svg" alt="Tests">
   <img src="https://img.shields.io/badge/Version-0.1.3-0f6cbd.svg" alt="Version">
   <img src="https://img.shields.io/badge/Maturity-functional-0F6CBD.svg" alt="Maturity">
 </p>
 
 ---
 
-**Verificação de honestidade - o que realmente funciona hoje:** a pesquisa RRT de um só agente do `src/rrt.rs` (com o seu limite real de tempo de relógio de parede `max_duration_ms`, independente de `max_iterations`), a matemática de colisão esfera/segmento do `src/obstacle.rs`, a matemática vetorial do `src/geometry.rs`, o PRNG determinista do `src/rng.rs`, a porta de validação de cenários do `src/semantics.rs`, a nova verificação de segurança de um caminho já calculado do `src/validate.rs` e a minimização real de casos do `src/shrink.rs` para um cenário que falha (apaga obstáculos e depois aperta o espaço de trabalho/o orçamento de iterações, voltando a verificar exatamente o mesmo predicado de falha após cada redução experimental, nunca um cenário que apenas parece mais pequeno enquanto testa outra coisa) são reais e testados (75 testes, `cargo test`) - cada caminho devolvido é verificado como livre de obstáculos nos testes, e não apenas com ar plausível. A CLI (`run.sh scenarios/example.json`, mais os subcomandos `validate` e `shrink`) é genuinamente utilizável hoje. O que continua a ser aspiracional: isto é um RRT simples de uma só thread, não um RRT* (não existe no código nenhuma passagem de religação para otimalidade) nem um coordenador multirrobô - a linguagem de «até 32+ robôs em simultâneo» e «geração de caminhos em menos de 50 ms» noutros pontos deste README descreve um alvo futuro, não um resultado medido; não há C++ em lado nenhum deste repositório (o Cargo.toml tem exatamente duas dependências, `serde`/`serde_json`, nenhum crate de threads/paralelismo), e é uma CLI sobre um ficheiro de cenário JSON, ainda não um serviço de rede ligado ao HYDRA-UMC-JOB-DISPATCHER nem validado contra um HYDRA-UMC-TWIN em direto. Consulte o `CHANGELOG.md` para saber exatamente o que já foi entregue e o `mejoras_futuras.txt` para a lista completa e honesta do que foi deliberadamente adiado e porquê.
+**Verificação de honestidade - o que realmente funciona hoje:** a pesquisa RRT de um só agente do `src/rrt.rs` (com o seu limite real de tempo de relógio de parede `max_duration_ms`, independente de `max_iterations`), a matemática de colisão esfera/segmento do `src/obstacle.rs`, a matemática vetorial do `src/geometry.rs`, o PRNG determinista do `src/rng.rs`, a porta de validação de cenários do `src/semantics.rs`, a nova verificação de segurança de um caminho já calculado do `src/validate.rs` e a minimização real de casos do `src/shrink.rs` para um cenário que falha (apaga obstáculos e depois aperta o espaço de trabalho/o orçamento de iterações, voltando a verificar exatamente o mesmo predicado de falha após cada redução experimental, nunca um cenário que apenas parece mais pequeno enquanto testa outra coisa) são reais e testados (83 testes, `cargo test`) - cada caminho devolvido é verificado como livre de obstáculos nos testes, e não apenas com ar plausível. A CLI (`run.sh scenarios/example.json`, mais os subcomandos `validate` e `shrink`) é genuinamente utilizável hoje. O que continua a ser aspiracional: isto é um RRT simples de uma só thread, não um RRT* (não existe no código nenhuma passagem de religação para otimalidade) nem um coordenador multirrobô - a linguagem de «até 32+ robôs em simultâneo» e «geração de caminhos em menos de 50 ms» noutros pontos deste README descreve um alvo futuro, não um resultado medido; não há C++ em lado nenhum deste repositório (o Cargo.toml tem exatamente duas dependências, `serde`/`serde_json`, nenhum crate de threads/paralelismo), e é uma CLI sobre um ficheiro de cenário JSON, ainda não um serviço de rede ligado ao HYDRA-UMC-JOB-DISPATCHER nem validado contra um HYDRA-UMC-TWIN em direto. Consulte o `CHANGELOG.md` para saber exatamente o que já foi entregue e o `mejoras_futuras.txt` para a lista completa e honesta do que foi deliberadamente adiado e porquê.
 
 ---
 
@@ -39,7 +39,7 @@ GPL-3.0-or-later - see LICENSE
 |---|---|
 | Versão | `0.1.3` |
 | Maturidade | Funcional |
-| Testes | 75 (`cargo test`) |
+| Testes | 83 (`cargo test`) |
 | Tecnologia | Rust / RRT* path planning |
 | Em hardware real | Ainda não: não há registo de execução em hardware real para esta versão |
 
@@ -54,7 +54,7 @@ Cada linha é uma parte deste repositório e a luz diz até onde chega hoje. É 
 | Área | Estado | O que significa aqui |
 |---|---|---|
 | Software | 🟡 | Funciona para o seu propósito principal; a verificação de honestidade acima lista o que ainda falta |
-| Testes | 🟢 | 75 testes automáticos, executados a cada alteração |
+| Testes | 🟢 | 83 testes automáticos, executados a cada alteração |
 | Hardware real | 🔴 | Ainda não: não há registo de execução em hardware real para esta versão |
 | Integração | 🟠 | As suas mensagens e rotas são verificadas contra os contratos partilhados do SDK; ainda não funcionou em conjunto com o equipamento real |
 | Implantação | 🟠 | Publicado como release; instalá-lo numa máquina limpa está documentado mas não registado |
@@ -126,7 +126,7 @@ cargo test
 
 ## 🧪 Testes
 
-75 testes automáticos correm com `cargo test`. Não precisam de hardware nem de nada fora desta máquina.
+83 testes automáticos correm com `cargo test`. Não precisam de hardware nem de nada fora desta máquina.
 
 A CI executa `HYDRA_UMC_CI=1 python tools/ci_validate.py`, que verifica o manifesto, os documentos, os oito README e as imagens.
 
@@ -163,7 +163,7 @@ cargo test   # matemática de geometria + colisão de obstáculos, o PRNG, o
              # planeador RRT (incluindo o seu limite real de tempo de relógio
              # de parede), a nova verificação de segurança do próprio
              # validate.rs e a minimização real de cenários que falham do
-             # shrink.rs - 75 testes no total
+             # shrink.rs - 83 testes no total
 ```
 
 ## 📂 Estrutura do repositório
