@@ -76,7 +76,7 @@ It integrates real-time occupancy data from the Vision Nodes and kinematic const
 
 ## 🧩 Role in HYDRA-UMC
 
-**HYDRA-UMC-PATH-PLANNER-3D** plans a collision-free path for one robot through a scene of sphere obstacles (an RRT search) and checks a path against obstacles and workspace bounds. It is a Rust library and command-line tool; it does not yet plan for several robots at once. The optional `serve` command starts a small HTTP listener (off unless asked for, loopback only by default, token optional) that answers only `GET /health` and `GET /metrics` with numbers about the service; it plans nothing.
+**HYDRA-UMC-PATH-PLANNER-3D** plans a collision-free path for one robot through a scene of sphere obstacles (an RRT search) and checks a path against obstacles and workspace bounds. It is a Rust library and command-line tool; it does not yet plan for several robots at once. The optional `serve` command starts a small HTTP listener (off unless asked for, loopback only by default, token optional) that answers only `GET /health` and `GET /metrics` (the latter only when the `metrics` section of the configuration file opens it) with numbers about the service; it plans nothing.
 
 ## 🏛️ Architecture
 
