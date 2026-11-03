@@ -4,6 +4,8 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+- **`GET /metrics` is off by default and loopback-only:** `serve --config FILE` (or `PATH_PLANNER_CONFIG`) reads a JSON file whose `metrics` section opens it (`{"metrics": {"enabled": true}}`; an unknown key stops the start). Closed, the route answers `404`; open, it answers a caller on this machine, or any caller with the bearer token when the service has one.
+
 - **An optional HTTP listener with `GET /health` and `GET /metrics`:** `serve [--addr HOST:PORT] [--token TOKEN] [--allow-anonymous]` (the token can also come from `PATH_PLANNER_TOKEN`). It is off unless the command is given, listens on `127.0.0.1:8117` by default, refuses another address without a token (unless `--allow-anonymous`) and answers only those two routes: liveness, open, and the numbers of the service in the text format of Prometheus (the version, the uptime, the responses by class of status and the health), behind the token when one is set (`401` without it). It plans nothing and never publishes a scenario, a path or a token. The metrics code is the canonical `service_metrics.rs` of HYDRA-UMC-SDK, copied byte for byte; the only new dependency is `tiny_http`.
 
 - **The documentation no longer says the twin validates the planned routes.** The related-projects entry, the ecosystem paragraph and the contributing guide said that routes are checked in the digital twin; nothing sends a route to the twin yet, and the text now says so.

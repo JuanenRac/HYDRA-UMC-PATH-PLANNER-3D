@@ -345,7 +345,7 @@ fn main() -> ExitCode {
         eprintln!("Usage: hydra-umc-path-planner-3d <scenario.json>");
         eprintln!("       hydra-umc-path-planner-3d validate <scenario.json> <path.json>");
         eprintln!("       hydra-umc-path-planner-3d shrink <scenario.json> [--out <minimal.json>]");
-        eprintln!("       hydra-umc-path-planner-3d serve [--addr HOST:PORT] [--token TOKEN] [--allow-anonymous]   (off unless asked for; GET /health and GET /metrics only)");
+        eprintln!("       hydra-umc-path-planner-3d serve [--addr HOST:PORT] [--token TOKEN] [--allow-anonymous] [--config FILE]   (off unless asked for; GET /health, and GET /metrics only when the configuration opens it)");
         eprintln!("See scenarios/example.json for the expected format.");
         return ExitCode::SUCCESS; // printing identity and usage is a valid no-arg invocation, not a failure
     };

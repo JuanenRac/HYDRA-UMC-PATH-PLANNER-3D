@@ -244,11 +244,27 @@ real minimal-failure scenario as a regression fixture once one is found.
 | `0` | ok — a path was found (`status: "ok"`), or `validate` reports `status: "safe"`, or `shrink` reports `status: "no_failure"`, or bare/no-argument usage output |
 | `1` | planner error (`status: "error"`), `validate` reports `status: "unsafe"`, `shrink` reports `status: "minimal_failure"` (a real bug was found and minimized), missing/unreadable/malformed scenario or path file, or missing `validate`/`shrink` arguments |
 
+## `serve` (optional, off unless asked for)
+
+```
+hydra-umc-path-planner-3d serve [--addr HOST:PORT] [--token TOKEN] [--allow-anonymous] [--config FILE]
+```
+
+A small HTTP listener that plans nothing and takes no scenario. It answers `GET /health` (liveness, open) and, only when the configuration opens it, `GET /metrics`; every other path is `404`. It listens on `127.0.0.1:8117` unless told otherwise; another address needs a token (`--token` or `PATH_PLANNER_TOKEN`) or `--allow-anonymous`.
+
+`--config FILE` (or `PATH_PLANNER_CONFIG`) is a JSON object; an unknown key stops the start:
+
+```json
+{"metrics": {"enabled": true}}
+```
+
+* **`metrics`:** `GET /metrics` in the text format of Prometheus, off unless `enabled` is `true` (closed, the route answers `404` like any unknown path, even with the token); read at start. Open, it answers a caller on this machine, or any caller that presents the bearer token when the service has one (`401` otherwise). It publishes numbers only (version, uptime, responses by class of status and health); no label carries a path, an address or a scenario.
+
 ## Not yet wired in
 
-This is a CLI driven by local JSON files, not a network service — there is
-no HTTP/gRPC endpoint yet (see the module doc at the top of `src/main.rs`
-for why exposing one is deferred). It also plans one agent per call, not
+Planning is a CLI driven by local JSON files: there is no HTTP/gRPC endpoint
+that plans (see the module doc at the top of `src/main.rs` for why exposing
+one is deferred). It also plans one agent per call, not
 true swarm-wide multi-robot coordination, and does not yet do RRT* rewiring
 or octree-accelerated collision checks at scale — real, deliberately
 deferred future work, not forgotten.

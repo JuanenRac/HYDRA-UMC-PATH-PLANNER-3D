@@ -5,7 +5,7 @@
 // =============================================================================
 //! The only network surface of this program, and it is off unless asked for: `serve` starts a small HTTP listener (`tiny_http`, blocking, no async
 //! runtime) that answers two read-only routes and nothing else - `GET /health` (liveness, open) and `GET /metrics` (the numbers of the service in the
-//! text format of Prometheus, behind the token when one is set). It plans nothing and takes no scenario: planning stays a command of the command line.
+//! text format of Prometheus, off unless the configuration file opens it, and behind the token when one is set). It plans nothing and takes no scenario: planning stays a command of the command line.
 //!
 //! By default it listens on the loopback address only. A listener on another address is refused unless a token is set (`--token` or
 //! `PATH_PLANNER_TOKEN`) or the operator says on purpose that it may be open (`--allow-anonymous`).
@@ -21,6 +21,38 @@ const NAME: &str = "HYDRA-UMC-PATH-PLANNER-3D";
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 pub const DEFAULT_ADDR: &str = "127.0.0.1:8117";
 pub const TOKEN_ENV: &str = "PATH_PLANNER_TOKEN";
+pub const CONFIG_ENV: &str = "PATH_PLANNER_CONFIG";
+
+/// Whether the configuration file opens `GET /metrics`: `{"metrics": {"enabled": true}}`. Off when there is no file, no section or `enabled` is false;
+/// an unknown key is an error.
+pub fn metrics_enabled(text: &str) -> Result<bool, String> {
+    if text.trim().is_empty() {
+        return Ok(false);
+    }
+    let value: serde_json::Value =
+        serde_json::from_str(text).map_err(|e| format!("configuration: {e}"))?;
+    let object = value
+        .as_object()
+        .ok_or("the configuration must be a JSON object")?;
+    if let Some(k) = object.keys().find(|k| k.as_str() != "metrics") {
+        return Err(format!("the configuration has an unknown field: {k}"));
+    }
+    let Some(section) = object.get("metrics") else {
+        return Ok(false);
+    };
+    let section = section.as_object().ok_or("metrics must be an object")?;
+    if let Some(k) = section.keys().find(|k| k.as_str() != "enabled") {
+        return Err(format!(
+            "the metrics configuration has an unknown field: {k}"
+        ));
+    }
+    match section.get("enabled") {
+        None => Ok(false),
+        Some(v) => v
+            .as_bool()
+            .ok_or_else(|| "metrics.enabled must be true or false".to_string()),
+    }
+}
 
 /// The numbers of this service for `GET /metrics` (see `service_metrics.rs`).
 static METRICS: ServiceMetrics = ServiceMetrics::new("hydra-umc-path-planner-3d");
@@ -31,6 +63,8 @@ pub struct Options {
     pub addr: String,
     pub token: Option<String>,
     pub allow_anonymous: bool,
+    /// The JSON file whose `metrics` section opens `GET /metrics` (None: it stays closed).
+    pub config: Option<String>,
 }
 
 /// Reads the options after `serve`; `env_token` is the value of `PATH_PLANNER_TOKEN`, used when `--token` is not given.
@@ -39,6 +73,7 @@ pub fn parse_options(args: &[String], env_token: Option<String>) -> Result<Optio
         addr: DEFAULT_ADDR.to_string(),
         token: env_token.filter(|t| !t.is_empty()),
         allow_anonymous: false,
+        config: std::env::var(CONFIG_ENV).ok().filter(|p| !p.is_empty()),
     };
     let mut iter = args.iter();
     while let Some(arg) = iter.next() {
@@ -49,6 +84,10 @@ pub fn parse_options(args: &[String], env_token: Option<String>) -> Result<Optio
             "--token" => {
                 let token = iter.next().ok_or("--token needs a value")?;
                 options.token = Some(token.clone()).filter(|t| !t.is_empty());
+            }
+            "--config" => {
+                options.config = Some(iter.next().ok_or("--config needs a path")?.clone())
+                    .filter(|p| !p.is_empty());
             }
             "--allow-anonymous" => options.allow_anonymous = true,
             other => return Err(format!("unknown option '{other}'")),
@@ -121,11 +160,21 @@ pub fn bind(addr: &str) -> std::io::Result<Server> {
 }
 
 /// Serves requests until the listener closes.
-pub fn run(server: &Server, token: &Option<String>) {
+pub fn run(server: &Server, token: &Option<String>, metrics: bool) {
     METRICS.start();
     for request in server.incoming_requests() {
         if is_metrics_request(&request) {
-            let allowed = authorized(&request, token);
+            // closed unless the configuration opens it (then the route does not exist)
+            if !metrics {
+                write_json(request, 404, &json!({"error": "not found"}));
+                continue;
+            }
+            // with a token the caller presents it; without one only a caller on this machine may read the numbers
+            let allowed = if token.is_some() {
+                authorized(&request, token)
+            } else {
+                request.remote_addr().is_some_and(|a| a.ip().is_loopback())
+            };
             METRICS.respond(request, VERSION, allowed, &[]);
             continue;
         }
@@ -148,7 +197,7 @@ pub fn serve_command(args: &[String]) -> std::process::ExitCode {
         Ok(options) => options,
         Err(e) => {
             eprintln!("serve: {e}");
-            eprintln!("Usage: serve [--addr HOST:PORT] [--token TOKEN] [--allow-anonymous]");
+            eprintln!("Usage: serve [--addr HOST:PORT] [--token TOKEN] [--allow-anonymous] [--config FILE]");
             return std::process::ExitCode::FAILURE;
         }
     };
@@ -156,6 +205,19 @@ pub fn serve_command(args: &[String]) -> std::process::ExitCode {
         eprintln!("serve: {problem}");
         return std::process::ExitCode::FAILURE;
     }
+    let metrics = match &options.config {
+        None => false,
+        Some(path) => match std::fs::read_to_string(path)
+            .map_err(|e| format!("could not read {path}: {e}"))
+            .and_then(|text| metrics_enabled(&text))
+        {
+            Ok(on) => on,
+            Err(e) => {
+                eprintln!("serve: {e}");
+                return std::process::ExitCode::FAILURE;
+            }
+        },
+    };
     let server = match bind(&options.addr) {
         Ok(server) => server,
         Err(e) => {
@@ -165,10 +227,11 @@ pub fn serve_command(args: &[String]) -> std::process::ExitCode {
     };
     let _ = writeln!(
         std::io::stderr(),
-        "{NAME} listening on {} (GET /health, GET /metrics)",
-        options.addr
+        "{NAME} listening on {} (GET /health{})",
+        options.addr,
+        if metrics { ", GET /metrics" } else { "" }
     );
-    run(&server, &options.token);
+    run(&server, &options.token, metrics);
     std::process::ExitCode::SUCCESS
 }
 
@@ -178,12 +241,17 @@ mod tests {
     use std::io::{Read, Write};
     use std::net::TcpStream;
 
-    fn start(token: Option<&str>) -> u16 {
+    fn start_with(token: Option<&str>, metrics: bool) -> u16 {
         let server = bind("127.0.0.1:0").unwrap();
         let port = server.server_addr().to_ip().unwrap().port();
         let token = token.map(String::from);
-        std::thread::spawn(move || run(&server, &token));
+        std::thread::spawn(move || run(&server, &token, metrics));
         port
+    }
+
+    /// A service whose configuration opens the metrics.
+    fn start(token: Option<&str>) -> u16 {
+        start_with(token, true)
     }
 
     fn get(port: u16, path: &str, bearer: Option<&str>) -> (u16, String) {
@@ -213,6 +281,13 @@ mod tests {
         let defaults = parse_options(&[], None).unwrap();
         assert_eq!(defaults.addr, DEFAULT_ADDR);
         assert!(startup_problem(&defaults).is_none());
+        assert_eq!(
+            parse_options(&args(&["--config", "c.json"]), None)
+                .unwrap()
+                .config
+                .as_deref(),
+            Some("c.json")
+        );
         let open = parse_options(&args(&["--addr", "0.0.0.0:8117"]), None).unwrap();
         assert!(startup_problem(&open).is_some());
         let with_token =
@@ -244,6 +319,27 @@ mod tests {
         assert!(text.contains("hydra_umc_service_health{service=\"hydra-umc-path-planner-3d\"} 1"));
         assert!(text.contains("class=\"4xx\"}"));
         assert!(!text.contains("/plan"));
+    }
+
+    #[test]
+    fn the_metrics_are_off_by_default_even_with_the_token() {
+        let port = start_with(None, false);
+        assert_eq!(get(port, "/health", None).0, 200);
+        assert_eq!(get(port, "/metrics", None).0, 404);
+        let guarded = start_with(Some("s3cret-token"), false);
+        assert_eq!(get(guarded, "/metrics", Some("s3cret-token")).0, 404);
+    }
+
+    #[test]
+    fn the_configuration_opens_the_metrics_and_checks_its_keys() {
+        assert!(!metrics_enabled("").unwrap());
+        assert!(!metrics_enabled("{}").unwrap());
+        assert!(!metrics_enabled(r#"{"metrics":{"enabled":false}}"#).unwrap());
+        assert!(metrics_enabled(r#"{"metrics":{"enabled":true}}"#).unwrap());
+        assert!(metrics_enabled(r#"{"metrics":{"enabled":"yes"}}"#).is_err());
+        assert!(metrics_enabled(r#"{"metrics":{"enabled":true,"x":1}}"#).is_err());
+        assert!(metrics_enabled(r#"{"other":1}"#).is_err());
+        assert!(metrics_enabled("[1]").is_err());
     }
 
     #[test]
