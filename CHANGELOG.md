@@ -4,6 +4,8 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+- **The build test of the repository compiles only on CI or when allowed:** for the stacks that compile (`rust`, `go`, `android`, `flutter`, `firmware-c`), `tools/build_test.py` prints `BUILD_TEST=SKIPPED` with exit status 2 on a plain PC, never a pass; `ALLOW_LOCAL_BUILD=1` allows it and a CI runner always may. The `python` and `node` stacks are not locked.
+
 ## [0.1.3] - The service takes a configuration file, the metrics route is off by default and opens only from it, an optional HTTP listener serves health and metrics, and the documentation no longer says the twin validates the routes
 
 - **`GET /metrics` is off by default and loopback-only:** `serve --config FILE` (or `PATH_PLANNER_CONFIG`) reads a JSON file whose `metrics` section opens it (`{"metrics": {"enabled": true}}`; an unknown key stops the start). Closed, the route answers `404`; open, it answers a caller on this machine, or any caller with the bearer token when the service has one.
