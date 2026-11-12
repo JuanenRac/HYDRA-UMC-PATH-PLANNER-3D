@@ -80,6 +80,8 @@ GPL-3.0-or-later - see LICENSE
 
 **HYDRA-UMC-PATH-PLANNER-3D** 在由球形障碍物构成的场景中为一台机器人规划无碰撞路径（RRT 搜索），并对照障碍物和工作空间边界检查路径。它是 Rust 库兼命令行工具；目前还不能同时为多台机器人规划。 可选的 `serve` 命令会启动一个小型 HTTP 监听器（不指定则不启动，默认仅回环地址，令牌可选），只响应 `GET /health` 和返回服务自身数字的 `GET /metrics`（后者仅在配置文件的 `metrics` 部分启用时可用），不做任何规划。
 
+> **平台：** 本 README 中的 CM5 指的是目前正在运行的试验台；HYDRA-UMC 的目标平台是 NVIDIA Jetson Orin NX 16 GB，这是尚未制造或测试的设计。
+
 ## 🏛️ 架构
 
 <p align="center">

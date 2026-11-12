@@ -78,6 +78,8 @@ Integra datos de ocupación en tiempo real de los Nodos Vision y restricciones c
 
 **HYDRA-UMC-PATH-PLANNER-3D** planifica una trayectoria sin colisiones para un robot a través de una escena de obstáculos esféricos (búsqueda RRT) y comprueba una trayectoria contra obstáculos y límites del espacio de trabajo. Es una biblioteca y una herramienta de línea de órdenes en Rust; todavía no planifica para varios robots a la vez. El comando opcional `serve` arranca un pequeño servidor HTTP (apagado salvo que se pida, solo en loopback por defecto, token opcional) que responde únicamente a `GET /health` y `GET /metrics` (este último solo cuando lo abre la sección `metrics` del fichero de configuración) con números del propio servicio; no planifica nada.
 
+> **Plataforma:** donde este README dice CM5, se refiere al banco piloto que funciona hoy; la plataforma objetivo de HYDRA-UMC es una NVIDIA Jetson Orin NX de 16 GB, un diseño que no se ha construido ni probado.
+
 ## 🏛️ Arquitectura
 
 <p align="center">
