@@ -3,8 +3,10 @@
 // GPL-3.0-or-later - see LICENSE
 //
 // The real collision-free path search: a standard RRT (Rapidly-exploring
-// Random Tree), not yet RRT* (no rewiring pass for path optimality) and
-// not yet multi-robot-synchronized (plans one agent through a static
+// Random Tree) and, when `optimize_iterations` is set, RRT* (the cheapest
+// parent among the neighbours of a new node, a rewiring pass, and more
+// iterations after the first path to shorten it). It is not yet
+// multi-robot-synchronized (plans one agent through a static
 // obstacle set, does not coordinate several agents' paths against each
 // other). Both are real, scoped-out future work: proving a
 // single-agent planner correct came first. Nearest-neighbor lookup uses
@@ -80,6 +82,15 @@ pub struct PlannerConfig {
     /// that cannot wait indefinitely for an answer.
     #[serde(default)]
     pub max_duration_ms: Option<u64>,
+    /// RRT* mode. 0 (the default) is the plain RRT: the search stops at the
+    /// first path, exactly as before. Above 0 every new node takes the
+    /// cheapest parent within `rewire_radius`, the neighbours are rewired
+    /// through it when that shortens them, and after the first path the
+    /// search goes on for this many more iterations to shorten it.
+    pub optimize_iterations: u32,
+    /// Radius of the neighbourhood used to choose a parent and to rewire.
+    /// Used only when `optimize_iterations` is above 0.
+    pub rewire_radius: f64,
 }
 
 impl Default for PlannerConfig {
@@ -91,6 +102,8 @@ impl Default for PlannerConfig {
             goal_threshold: 0.5,
             robot_radius: 0.1,
             max_duration_ms: None,
+            optimize_iterations: 0,
+            rewire_radius: 1.0,
         }
     }
 }
@@ -174,6 +187,10 @@ pub fn plan(
         return Ok(vec![start]);
     }
 
+    if config.optimize_iterations > 0 {
+        return plan_optimizing(start, goal, obstacles, workspace, config, seed);
+    }
+
     let mut rng = Xorshift64Star::new(seed);
     let mut tree = vec![TreeNode {
         point: start,
@@ -242,6 +259,161 @@ pub fn plan(
     }
 
     Err(PlanError::NoPathFound)
+}
+
+/// RRT*: the same sampling and steering as `plan`, with a cost per node.
+/// A new node takes the cheapest collision-free parent within
+/// `rewire_radius`, then every neighbour that would be cheaper through it is
+/// rewired to it (the cost of its whole subtree follows). After the first
+/// node close enough to the goal the search runs `optimize_iterations` more
+/// iterations, and the answer is the cheapest way to the goal over all the
+/// nodes that see it. Costs only ever go down, so for the same seed the path
+/// is never longer than the one the plain RRT returns.
+fn plan_optimizing(
+    start: Vec3,
+    goal: Vec3,
+    obstacles: &[Obstacle],
+    workspace: Workspace,
+    config: PlannerConfig,
+    seed: u64,
+) -> Result<Vec<Vec3>, PlanError> {
+    let mut rng = Xorshift64Star::new(seed);
+    let mut tree = vec![TreeNode {
+        point: start,
+        parent: None,
+    }];
+    let mut cost: Vec<f64> = vec![0.0];
+    let mut children: Vec<Vec<usize>> = vec![Vec::new()];
+    let mut kd = KdTree::new();
+    kd.insert(start, 0);
+
+    let is_clear = |a: Vec3, b: Vec3| -> bool {
+        !obstacles
+            .iter()
+            .any(|o| o.intersects_segment(a, b, config.robot_radius))
+    };
+
+    let deadline = config.max_duration_ms.map(Duration::from_millis);
+    let search_started = Instant::now();
+    let mut found = false;
+    let mut iterations: u32 = 0;
+    let mut extra: u32 = 0;
+
+    loop {
+        if found {
+            if extra >= config.optimize_iterations {
+                break;
+            }
+            extra += 1;
+        } else {
+            if iterations >= config.max_iterations {
+                break;
+            }
+            iterations += 1;
+        }
+        if let Some(deadline) = deadline {
+            if search_started.elapsed() >= deadline {
+                if found {
+                    break;
+                }
+                return Err(PlanError::TimeLimitExceeded);
+            }
+        }
+
+        let sample = if rng.next_f64() < config.goal_bias {
+            goal
+        } else {
+            workspace.sample(&mut rng, config.robot_radius)
+        };
+
+        let nearest_idx = kd.nearest(sample);
+        let nearest_point = tree[nearest_idx].point;
+        let to_sample = sample.sub(nearest_point);
+        let dist = to_sample.length();
+        let new_point = if dist <= config.step_size {
+            sample
+        } else {
+            nearest_point.add(to_sample.normalized().scale(config.step_size))
+        };
+        if !is_clear(nearest_point, new_point) {
+            continue;
+        }
+
+        // the neighbourhood, in index order so the search stays deterministic
+        let mut near: Vec<usize> = (0..tree.len())
+            .filter(|&i| tree[i].point.distance(new_point) <= config.rewire_radius)
+            .collect();
+        if !near.contains(&nearest_idx) {
+            near.push(nearest_idx);
+        }
+
+        let mut parent = nearest_idx;
+        let mut new_cost = cost[nearest_idx] + nearest_point.distance(new_point);
+        for &n in &near {
+            let through = cost[n] + tree[n].point.distance(new_point);
+            if through < new_cost && is_clear(tree[n].point, new_point) {
+                parent = n;
+                new_cost = through;
+            }
+        }
+
+        tree.push(TreeNode {
+            point: new_point,
+            parent: Some(parent),
+        });
+        cost.push(new_cost);
+        children.push(Vec::new());
+        let new_idx = tree.len() - 1;
+        children[parent].push(new_idx);
+        kd.insert(new_point, new_idx);
+
+        for &n in &near {
+            if n == parent {
+                continue;
+            }
+            let through = new_cost + new_point.distance(tree[n].point);
+            if through + 1e-12 < cost[n] && is_clear(new_point, tree[n].point) {
+                if let Some(old) = tree[n].parent {
+                    children[old].retain(|&c| c != n);
+                }
+                tree[n].parent = Some(new_idx);
+                children[new_idx].push(n);
+                let delta = through - cost[n];
+                let mut stack = vec![n];
+                while let Some(x) = stack.pop() {
+                    cost[x] += delta;
+                    stack.extend(children[x].iter().copied());
+                }
+            }
+        }
+
+        if !found && new_point.distance(goal) <= config.goal_threshold && is_clear(new_point, goal)
+        {
+            found = true;
+        }
+    }
+
+    if !found {
+        return Err(PlanError::NoPathFound);
+    }
+
+    // the cheapest way to the goal over every node that is close enough and sees it
+    let mut best: Option<(usize, f64)> = None;
+    for (i, node) in tree.iter().enumerate() {
+        if node.point.distance(goal) > config.goal_threshold {
+            continue;
+        }
+        let total = cost[i] + node.point.distance(goal);
+        if best.is_none_or(|(_, t)| total < t) && is_clear(node.point, goal) {
+            best = Some((i, total));
+        }
+    }
+    let (end, _) = best.ok_or(PlanError::NoPathFound)?;
+    let mut path = reconstruct_path(&tree, end);
+    if tree[end].point != goal {
+        path.push(goal);
+    }
+    Ok(path)
 }
 
 fn reconstruct_path(tree: &[TreeNode], mut idx: usize) -> Vec<Vec3> {
@@ -574,6 +746,182 @@ mod tests {
                 Vec3::new(5.0, 0.0, 0.0),
                 &[],
                 open_workspace(),
+                config,
+                1
+            ),
+            Err(PlanError::InvalidInput(
+                crate::semantics::InvalidScenarioReason::TooManyIterations
+            ))
+        );
+    }
+
+    fn path_length(path: &[Vec3]) -> f64 {
+        path.windows(2).map(|w| w[0].distance(w[1])).sum()
+    }
+
+    fn optimizing(extra: u32) -> PlannerConfig {
+        PlannerConfig {
+            max_iterations: 20_000,
+            optimize_iterations: extra,
+            rewire_radius: 2.0,
+            ..PlannerConfig::default()
+        }
+    }
+
+    #[test]
+    fn rrt_star_is_off_by_default() {
+        let config = PlannerConfig::default();
+        assert_eq!(config.optimize_iterations, 0);
+        let from_json: PlannerConfig = serde_json::from_str("{}").unwrap();
+        assert_eq!(from_json.optimize_iterations, 0);
+    }
+
+    #[test]
+    fn rrt_star_never_returns_a_longer_path_than_the_plain_search_for_the_same_seed() {
+        let start = Vec3::new(-8.0, -8.0, 0.0);
+        let goal = Vec3::new(8.0, 8.0, 0.0);
+        let mut shorter = 0;
+        for seed in 1..=8u64 {
+            let plain = plan(
+                start,
+                goal,
+                &[],
+                open_workspace(),
+                PlannerConfig {
+                    max_iterations: 20_000,
+                    ..PlannerConfig::default()
+                },
+                seed,
+            )
+            .expect("an open workspace has a path");
+            let star = plan(start, goal, &[], open_workspace(), optimizing(1500), seed)
+                .expect("an open workspace has a path");
+            assert_eq!(star.first().copied(), Some(start));
+            assert_eq!(star.last().copied(), Some(goal));
+            let (a, b) = (path_length(&plain), path_length(&star));
+            assert!(b <= a + 1e-9, "seed {seed}: {b} is longer than {a}");
+            if b + 1e-6 < a {
+                shorter += 1;
+            }
+        }
+        assert!(shorter >= 1, "the rewiring never shortened a single path");
+    }
+
+    #[test]
+    fn rrt_star_paths_stay_clear_of_the_obstacles() {
+        let obstacles = corpus::single_blocking_obstacle();
+        let config = PlannerConfig {
+            max_iterations: 20_000,
+            ..optimizing(800)
+        };
+        for seed in 1..=4u64 {
+            let path = plan(
+                corpus::start(),
+                corpus::goal(),
+                &obstacles,
+                corpus::open_workspace(),
+                config,
+                seed,
+            )
+            .expect("one obstacle leaves a way round");
+            for pair in path.windows(2) {
+                assert!(!obstacles.iter().any(|o| o.intersects_segment(
+                    pair[0],
+                    pair[1],
+                    config.robot_radius
+                )));
+            }
+        }
+    }
+
+    #[test]
+    fn rrt_star_is_deterministic_for_a_seed() {
+        let start = Vec3::new(-5.0, 0.0, 0.0);
+        let goal = Vec3::new(5.0, 3.0, 0.0);
+        let a = plan(start, goal, &[], open_workspace(), optimizing(500), 11).unwrap();
+        let b = plan(start, goal, &[], open_workspace(), optimizing(500), 11).unwrap();
+        assert_eq!(a, b);
+    }
+
+    #[test]
+    fn rrt_star_still_reports_no_path_behind_a_wall() {
+        let (workspace, wall) = corpus::workspace_spanning_wall();
+        let config = PlannerConfig {
+            max_iterations: 300,
+            ..optimizing(100)
+        };
+        assert_eq!(
+            plan(corpus::start(), corpus::goal(), &wall, workspace, config, 1),
+            Err(PlanError::NoPathFound)
+        );
+    }
+
+    #[test]
+    fn rrt_star_with_a_zero_time_limit_reports_the_time_limit() {
+        let config = PlannerConfig {
+            max_duration_ms: Some(0),
+            ..optimizing(100)
+        };
+        assert_eq!(
+            plan(
+                corpus::start(),
+                corpus::goal(),
+                &[],
+                corpus::open_workspace(),
+                config,
+                1
+            ),
+            Err(PlanError::TimeLimitExceeded)
+        );
+    }
+
+    #[test]
+    fn rrt_star_refuses_a_rewire_radius_that_is_not_a_distance() {
+        for radius in [0.0, -1.0, f64::NAN, f64::INFINITY] {
+            let config = PlannerConfig {
+                rewire_radius: radius,
+                ..optimizing(10)
+            };
+            assert!(matches!(
+                plan(
+                    corpus::start(),
+                    corpus::goal(),
+                    &[],
+                    corpus::open_workspace(),
+                    config,
+                    1
+                ),
+                Err(PlanError::InvalidInput(_))
+            ));
+        }
+        // the radius is not read when the plain search is used
+        let plain = PlannerConfig {
+            rewire_radius: -1.0,
+            ..PlannerConfig::default()
+        };
+        assert!(plan(
+            corpus::start(),
+            corpus::goal(),
+            &[],
+            corpus::open_workspace(),
+            plain,
+            1
+        )
+        .is_ok());
+    }
+
+    #[test]
+    fn rrt_star_refuses_more_extra_iterations_than_the_limit() {
+        let config = PlannerConfig {
+            optimize_iterations: u32::MAX,
+            ..PlannerConfig::default()
+        };
+        assert_eq!(
+            plan(
+                corpus::start(),
+                corpus::goal(),
+                &[],
+                corpus::open_workspace(),
                 config,
                 1
             ),

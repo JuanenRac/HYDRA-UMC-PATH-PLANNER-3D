@@ -47,6 +47,10 @@ pub enum InvalidScenarioReason {
     /// more iterations than the planner will run in one call: one tree node
     /// and one KD-tree node are allocated per iteration
     TooManyIterations,
+    /// the radius used to choose a parent and rewire (RRT*) is not a finite number
+    NonFiniteRewireRadius,
+    /// the radius used to choose a parent and rewire (RRT*) is zero or negative
+    NonPositiveRewireRadius,
     /// the workspace is narrower than the robot on some axis, so no centre
     /// of the robot can keep its whole body inside it
     WorkspaceNarrowerThanRobot,
@@ -150,6 +154,18 @@ pub fn validate_planner_config(config: &PlannerConfig) -> Result<(), InvalidScen
     if config.max_iterations > MAX_ITERATIONS_LIMIT {
         return Err(InvalidScenarioReason::TooManyIterations);
     }
+    // the extra RRT* iterations allocate nodes the same way, and the radius is read only when RRT* is on
+    if config.optimize_iterations > MAX_ITERATIONS_LIMIT {
+        return Err(InvalidScenarioReason::TooManyIterations);
+    }
+    if config.optimize_iterations > 0 {
+        if !config.rewire_radius.is_finite() {
+            return Err(InvalidScenarioReason::NonFiniteRewireRadius);
+        }
+        if config.rewire_radius <= 0.0 {
+            return Err(InvalidScenarioReason::NonPositiveRewireRadius);
+        }
+    }
     Ok(())
 }
 
@@ -195,6 +211,29 @@ mod tests {
     #[test]
     fn zero_robot_radius_is_a_real_valid_value() {
         assert_eq!(validate_robot_radius(0.0), Ok(()));
+    }
+
+    #[test]
+    fn the_rewire_radius_is_read_only_when_rrt_star_is_on() {
+        let off = PlannerConfig {
+            rewire_radius: -1.0,
+            ..Default::default()
+        };
+        assert_eq!(validate_planner_config(&off), Ok(()));
+        let on = |radius: f64| PlannerConfig {
+            optimize_iterations: 5,
+            rewire_radius: radius,
+            ..Default::default()
+        };
+        assert_eq!(validate_planner_config(&on(1.0)), Ok(()));
+        assert_eq!(
+            validate_planner_config(&on(0.0)),
+            Err(InvalidScenarioReason::NonPositiveRewireRadius)
+        );
+        assert_eq!(
+            validate_planner_config(&on(f64::NAN)),
+            Err(InvalidScenarioReason::NonFiniteRewireRadius)
+        );
     }
 
     #[test]

@@ -10,15 +10,15 @@ each state their own short version of the relevant reason directly
 inline, so none of them depend on this file to make sense on their own
 - this is the one place the items are written up in full.
 
-1. RRT* (path optimality via a rewiring pass)
+1. RRT* (path optimality via a rewiring pass) - DONE, off by default
    -----------------------------------------
-   src/rrt.rs implements a standard RRT: it finds *a* collision-free
-   path, not the shortest/cheapest one. RRT* adds a rewiring pass that
-   improves path quality as the tree grows. Proving a single-agent
-   planner correct (every returned path genuinely obstacle-clear, not
-   just plausible-looking) came first; optimizing the paths it returns
-   is separate, additive work on top of a search that is already known
-   to be correct.
+   src/rrt.rs keeps the standard RRT as the default and adds RRT* behind
+   `optimize_iterations` (> 0): cheapest parent among the neighbours,
+   rewiring with the cost of the subtree following, and extra iterations
+   after the first path. For one seed the result is never longer than the
+   plain RRT. What is not there: a neighbour search faster than a scan of
+   the tree (it is linear per iteration) and an asymptotic-optimality
+   claim (the radius is a setting, not shrunk with the tree).
 
 2. True multi-robot synchronized planning
    ---------------------------------------

@@ -47,6 +47,15 @@ Runs the real RRT planner against a scenario (`start`, `goal`, `obstacles`,
 `{"status":"ok","path":[...]}` on success, or
 `{"status":"error","reason":"..."}` if the planner can't produce a path.
 
+The `config` object takes `max_iterations`, `step_size`, `goal_bias`, `goal_threshold`, `robot_radius` and `max_duration_ms`
+(each one left out takes its default), and two keys that switch on RRT*: `optimize_iterations` (default `0`, the plain RRT that
+stops at the first path) and `rewire_radius` (default `1.0`). With `optimize_iterations` above `0` every new node takes the
+cheapest collision-free parent within `rewire_radius`, the neighbours that get cheaper through it are rewired to it, and after
+the first path the search runs that many more iterations to shorten it; the answer is the cheapest way to the goal over every node
+that sees it. For the same seed the path is never longer than the plain RRT one. A `rewire_radius` that is not a finite number above
+zero is refused (`invalid_input: NonFiniteRewireRadius` or `NonPositiveRewireRadius`) when `optimize_iterations` is above `0`, and
+`optimize_iterations` has the same ceiling as `max_iterations`. A time limit that is hit after a path was found returns that path.
+
 The repo's own `scenarios/example.json` fixture — start/goal on opposite
 sides of a workspace, with three spherical obstacles in the way:
 
@@ -265,6 +274,6 @@ A small HTTP listener that plans nothing and takes no scenario. It answers `GET 
 Planning is a CLI driven by local JSON files: there is no HTTP/gRPC endpoint
 that plans (see the module doc at the top of `src/main.rs` for why exposing
 one is deferred). It also plans one agent per call, not
-true swarm-wide multi-robot coordination, and does not yet do RRT* rewiring
-or octree-accelerated collision checks at scale — real, deliberately
+true swarm-wide multi-robot coordination, and does not yet do
+octree-accelerated collision checks at scale — real, deliberately
 deferred future work, not forgotten.

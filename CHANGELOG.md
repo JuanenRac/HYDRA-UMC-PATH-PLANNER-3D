@@ -4,6 +4,8 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+- **RRT*, off by default:** `config.optimize_iterations` (default `0`, the plain RRT as before) and `config.rewire_radius` (default `1.0`) switch on a search where every new node takes the cheapest collision-free parent within the radius, the neighbours that get cheaper through it are rewired (the cost of their whole subtree follows) and, after the first path, that many more iterations run to shorten it; the answer is the cheapest way to the goal over every node that sees it. For one seed the path is never longer than the plain RRT one, the same seed gives the same path, a time limit hit after a path was found returns it, and a radius that is not a finite number above zero is refused with `NonFiniteRewireRadius` or `NonPositiveRewireRadius` (read only when RRT* is on). 9 new tests in `rrt.rs` and `semantics.rs` and one of the command line.
+
 ## [0.1.4] - The build test of the repository compiles only on CI or when allowed: for the stacks that compile (rust, go, android, flutter, firmware-c), tools/buildtest.py prints BUILDTEST=SKIPPED with exit status 2 on a plain PC, never a...
 
 - **The build test of the repository compiles only on CI or when allowed:** for the stacks that compile (`rust`, `go`, `android`, `flutter`, `firmware-c`), `tools/build_test.py` prints `BUILD_TEST=SKIPPED` with exit status 2 on a plain PC, never a pass; `ALLOW_LOCAL_BUILD=1` allows it and a CI runner always may. The `python` and `node` stacks are not locked.

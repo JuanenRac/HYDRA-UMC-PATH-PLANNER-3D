@@ -75,3 +75,29 @@ fn a_path_must_begin_at_the_start_and_end_at_the_goal() {
     let (code, stdout, _) = run(&[std::path::Path::new("validate"), &scenario, &good]);
     assert_eq!(code, Some(0), "{stdout}");
 }
+
+#[test]
+fn a_scenario_can_ask_for_rrt_star_and_a_bad_radius_is_refused() {
+    let star = temp(
+        "star.json",
+        r#"{"start":{"x":0,"y":0,"z":0},"goal":{"x":2,"y":0,"z":0},
+  "workspace":{"min":{"x":-5,"y":-5,"z":-5},"max":{"x":5,"y":5,"z":5}},
+  "obstacles":[{"center":{"x":1,"y":3,"z":0},"radius":0.5}],
+  "config":{"robot_radius":0.3,"optimize_iterations":200,"rewire_radius":1.5},"seed":3}"#,
+    );
+    let (code, stdout, stderr) = run(&[&star]);
+    assert_eq!(code, Some(0), "{stdout} {stderr}");
+    let parsed: serde_json::Value = serde_json::from_str(&stdout).unwrap();
+    assert_eq!(parsed["status"], "ok");
+
+    let bad = temp(
+        "star-bad.json",
+        r#"{"start":{"x":0,"y":0,"z":0},"goal":{"x":2,"y":0,"z":0},
+  "workspace":{"min":{"x":-5,"y":-5,"z":-5},"max":{"x":5,"y":5,"z":5}},
+  "obstacles":[],
+  "config":{"optimize_iterations":10,"rewire_radius":0},"seed":3}"#,
+    );
+    let (code, stdout, _) = run(&[&bad]);
+    assert_ne!(code, Some(0), "{stdout}");
+    assert!(stdout.contains("NonPositiveRewireRadius"), "{stdout}");
+}
