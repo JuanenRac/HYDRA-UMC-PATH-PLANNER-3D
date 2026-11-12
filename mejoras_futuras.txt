@@ -30,8 +30,11 @@ inline, so none of them depend on this file to make sense on their own
    multi-robot coordination, and RRT* all at once would have meant
    debugging all three together instead of proving each independently.
 
-3. Octree/BVH-accelerated collision checks at scale
+3. Octree/BVH-accelerated collision checks at scale - DONE (BVH)
    --------------------------------------------------
+   src/obstacle.rs now has ObstacleIndex, a bounding-volume hierarchy built
+   once per plan() call; it answers exactly what the scan answers and is
+   checked against it on random scenes. The text below is the earlier note.
    src/obstacle.rs checks obstacles (spheres) with brute-force,
    per-obstacle math - the simplest 3D collision primitive that is
    still real and correct. That's fine at today's scale: a handful of

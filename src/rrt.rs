@@ -18,7 +18,7 @@
 
 use crate::geometry::Vec3;
 use crate::kdtree::KdTree;
-use crate::obstacle::Obstacle;
+use crate::obstacle::{Obstacle, ObstacleIndex};
 use crate::rng::Xorshift64Star;
 use serde::{Deserialize, Serialize};
 use std::time::{Duration, Instant};
@@ -187,8 +187,11 @@ pub fn plan(
         return Ok(vec![start]);
     }
 
+    // one hierarchy for the whole search: every extension asks "is this segment clear?"
+    let index = ObstacleIndex::new(obstacles);
+
     if config.optimize_iterations > 0 {
-        return plan_optimizing(start, goal, obstacles, workspace, config, seed);
+        return plan_optimizing(start, goal, &index, workspace, config, seed);
     }
 
     let mut rng = Xorshift64Star::new(seed);
@@ -199,11 +202,8 @@ pub fn plan(
     let mut kd = KdTree::new();
     kd.insert(start, 0);
 
-    let is_clear = |a: Vec3, b: Vec3| -> bool {
-        !obstacles
-            .iter()
-            .any(|o| o.intersects_segment(a, b, config.robot_radius))
-    };
+    let is_clear =
+        |a: Vec3, b: Vec3| -> bool { !index.any_intersects_segment(a, b, config.robot_radius) };
 
     let deadline = config.max_duration_ms.map(Duration::from_millis);
     let search_started = Instant::now();
@@ -272,7 +272,7 @@ pub fn plan(
 fn plan_optimizing(
     start: Vec3,
     goal: Vec3,
-    obstacles: &[Obstacle],
+    index: &ObstacleIndex,
     workspace: Workspace,
     config: PlannerConfig,
     seed: u64,
@@ -287,11 +287,8 @@ fn plan_optimizing(
     let mut kd = KdTree::new();
     kd.insert(start, 0);
 
-    let is_clear = |a: Vec3, b: Vec3| -> bool {
-        !obstacles
-            .iter()
-            .any(|o| o.intersects_segment(a, b, config.robot_radius))
-    };
+    let is_clear =
+        |a: Vec3, b: Vec3| -> bool { !index.any_intersects_segment(a, b, config.robot_radius) };
 
     let deadline = config.max_duration_ms.map(Duration::from_millis);
     let search_started = Instant::now();
@@ -765,6 +762,40 @@ mod tests {
             optimize_iterations: extra,
             rewire_radius: 2.0,
             ..PlannerConfig::default()
+        }
+    }
+
+    #[test]
+    fn a_crowded_scene_is_planned_through_the_hierarchy_and_stays_clear_by_a_full_scan() {
+        let mut rng = Xorshift64Star::new(21);
+        let obstacles: Vec<Obstacle> = (0..400)
+            .map(|_| {
+                Obstacle::new(
+                    Vec3::new(
+                        rng.next_range(-9.0, 9.0),
+                        rng.next_range(-9.0, 9.0),
+                        rng.next_range(-9.0, 9.0),
+                    ),
+                    0.4,
+                )
+            })
+            .collect();
+        let start = Vec3::new(-9.5, -9.5, -9.5);
+        let goal = Vec3::new(9.5, 9.5, 9.5);
+        let config = PlannerConfig {
+            max_iterations: 60_000,
+            ..PlannerConfig::default()
+        };
+        let path = plan(start, goal, &obstacles, open_workspace(), config, 4)
+            .expect("a scattered scene still has a way through");
+        assert_eq!(path.first().copied(), Some(start));
+        assert_eq!(path.last().copied(), Some(goal));
+        for pair in path.windows(2) {
+            assert!(!obstacles.iter().any(|o| o.intersects_segment(
+                pair[0],
+                pair[1],
+                config.robot_radius
+            )));
         }
     }
 

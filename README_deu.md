@@ -18,14 +18,14 @@ GPL-3.0-or-later - see LICENSE
   <img src="https://img.shields.io/badge/License-GPL%203.0--or--later-blue.svg" alt="GPL 3.0 or later">
   <img src="https://img.shields.io/badge/Algorithm-RRT-orange.svg" alt="Algorithm">
   <img src="https://img.shields.io/badge/Engine-Rust-blue.svg" alt="Engine">
-  <img src="https://img.shields.io/badge/Tests-93%20passing-2ea44f.svg" alt="Tests">
+  <img src="https://img.shields.io/badge/Tests-99%20passing-2ea44f.svg" alt="Tests">
   <img src="https://img.shields.io/badge/Version-0.1.4-0f6cbd.svg" alt="Version">
   <img src="https://img.shields.io/badge/Maturity-functional-0F6CBD.svg" alt="Maturity">
 </p>
 
 ---
 
-**Ehrlichkeitscheck - was heute wirklich läuft:** die Ein-Agenten-RRT-Suche in `src/rrt.rs` (mit ihrer echten `max_duration_ms`-Uhrzeit-Deadline, unabhängig von `max_iterations`), die Kugel-/Segment-Kollisionsmathematik von `src/obstacle.rs`, die Vektormathematik von `src/geometry.rs`, der deterministische PRNG von `src/rng.rs`, die Szenario-Validierungsschranke von `src/semantics.rs` und die Sicherheits-Nachprüfung eines bereits berechneten Pfads in `src/validate.rs` sind real und getestet (93 Tests, `cargo test`) - jeder zurückgegebene Pfad wird in den Tests als tatsächlich hindernisfrei verifiziert, nicht nur als plausibel. Die CLI (`run.sh scenarios/example.json`, plus der `validate`-Unterbefehl) ist heute wirklich nutzbar. Was noch angestrebt, aber nicht umgesetzt ist: Dies ist ein Single-Thread-RRT (plus ein RRT*-Modus mit Rewiring-Schritt, standardmäßig aus, `optimize_iterations`) und kein Multi-Roboter-Koordinator - die Formulierungen "bis zu 32+ Roboter gleichzeitig" und "Pfadgenerierung in weniger als 50 ms" an anderer Stelle in diesem README beschreiben ein zukünftiges Ziel, kein gemessenes Ergebnis; es gibt nirgendwo in diesem Repository C++-Code (Cargo.toml hat genau zwei Abhängigkeiten, `serde`/`serde_json`, kein Parallelitäts-/Thread-Crate), und es ist eine CLI über eine JSON-Szenariodatei, noch kein Netzwerkdienst, der an HYDRA-UMC-JOB-DISPATCHER angebunden oder gegen ein echtes, laufendes HYDRA-UMC-TWIN validiert ist. Siehe `CHANGELOG.md` für genau das, was bisher ausgeliefert wurde, und `mejoras_futuras.txt` für die vollständige, ehrliche Liste dessen, was bewusst zurückgestellt wurde und warum.
+**Ehrlichkeitscheck - was heute wirklich läuft:** die Ein-Agenten-RRT-Suche in `src/rrt.rs` (mit ihrer echten `max_duration_ms`-Uhrzeit-Deadline, unabhängig von `max_iterations`), die Kugel-/Segment-Kollisionsmathematik von `src/obstacle.rs`, die Vektormathematik von `src/geometry.rs`, der deterministische PRNG von `src/rng.rs`, die Szenario-Validierungsschranke von `src/semantics.rs` und die Sicherheits-Nachprüfung eines bereits berechneten Pfads in `src/validate.rs` sind real und getestet (99 Tests, `cargo test`) - jeder zurückgegebene Pfad wird in den Tests als tatsächlich hindernisfrei verifiziert, nicht nur als plausibel. Die CLI (`run.sh scenarios/example.json`, plus der `validate`-Unterbefehl) ist heute wirklich nutzbar. Was noch angestrebt, aber nicht umgesetzt ist: Dies ist ein Single-Thread-RRT (plus ein RRT*-Modus mit Rewiring-Schritt, standardmäßig aus, `optimize_iterations`) und kein Multi-Roboter-Koordinator - die Formulierungen "bis zu 32+ Roboter gleichzeitig" und "Pfadgenerierung in weniger als 50 ms" an anderer Stelle in diesem README beschreiben ein zukünftiges Ziel, kein gemessenes Ergebnis; es gibt nirgendwo in diesem Repository C++-Code (Cargo.toml hat genau zwei Abhängigkeiten, `serde`/`serde_json`, kein Parallelitäts-/Thread-Crate), und es ist eine CLI über eine JSON-Szenariodatei, noch kein Netzwerkdienst, der an HYDRA-UMC-JOB-DISPATCHER angebunden oder gegen ein echtes, laufendes HYDRA-UMC-TWIN validiert ist. Siehe `CHANGELOG.md` für genau das, was bisher ausgeliefert wurde, und `mejoras_futuras.txt` für die vollständige, ehrliche Liste dessen, was bewusst zurückgestellt wurde und warum.
 
 ---
 
@@ -39,7 +39,7 @@ GPL-3.0-or-later - see LICENSE
 |---|---|
 | Version | `0.1.4` |
 | Reifegrad | Funktionsfähig |
-| Tests | 93 (`cargo test`) |
+| Tests | 99 (`cargo test`) |
 | Technik | Rust / RRT* path planning |
 | Auf echter Hardware | Noch nicht: für diese Version ist kein Lauf auf echter Hardware vermerkt |
 
@@ -54,7 +54,7 @@ Jede Zeile ist ein Teil dieses Repositorys, und die Ampel sagt, wie weit er heut
 | Bereich | Stand | Was das hier bedeutet |
 |---|---|---|
 | Software | 🟡 | Funktioniert für seinen Hauptzweck; die Ehrlichkeitsprüfung oben nennt, was noch fehlt |
-| Tests | 🟢 | 93 automatische Tests, bei jeder Änderung ausgeführt |
+| Tests | 🟢 | 99 automatische Tests, bei jeder Änderung ausgeführt |
 | Echte Hardware | 🔴 | Noch nicht: für diese Version ist kein Lauf auf echter Hardware vermerkt |
 | Integration | 🟠 | Seine Nachrichten und Routen werden gegen die gemeinsamen Verträge des SDK geprüft; es lief noch nicht zusammen mit der echten Ausrüstung |
 | Bereitstellung | 🟠 | Als Release veröffentlicht; die Installation auf einem frischen Rechner ist dokumentiert, aber nicht vermerkt |
@@ -108,7 +108,7 @@ flowchart TB
 * **Warum kollisionsfreie 3D-Planung ein eigener Dienst ist.** Die Pfadsuche über eine live 3D-Szene (jeder Roboter, jedes Werkzeug, jedes Hindernis der Zelle) ist CPU-intensiv und latenzsensibel auf eine andere Weise als die Auftragsplanung selbst - sie zu isolieren bedeutet, dass eine langsame Planungsanfrage HYDRA-UMC-JOB-DISPATCHER nie daran hindert, andere Arbeit zuzuweisen.
 * **Die Validierung mit HYDRA-UMC-TWIN ist geplant, nicht erledigt.** HYDRA-UMC-TWIN liest heute nur Projektmanifeste: Es hat weder Physik noch Simulation, sodass nichts eine geplante Route auf Drehmomentgrenzen oder Singularitäten prüft, bevor sie an einen echten Arm geht. `validate` prüft Hindernisse, den Arbeitsraum und die beiden Enden des Pfads, nicht mehr.
 * **Warum die Suche standardmäßig ein einfacher RRT ist (RRT\* nur auf Wunsch) und kein Multi-Roboter-Koordinator.** `src/rrt.rs` implementiert eine echte, getestete Rapidly-exploring-Random-Tree-Suche - ein einzelner Agent, eine statische Hindernismenge, ein wirklich kollisionsfreies Ergebnis (jede zurückgegebene Route wird in Tests als tatsächlich hindernisfrei verifiziert, nicht nur plausibel aussehend). RRT\* (ein optimalitätsverbessernder Rewiring-Durchlauf) ist ebenfalls gebaut, standardmäßig aus (`optimize_iterations`), sodass die bewährte Ein-Agenten-Suche der Standard bleibt; echte, synchronisierte Multi-Roboter-Planung (die "bis zu 32+ Roboter gleichzeitig" dieses READMEs) ist echte, bewusst ausgeklammerte künftige Arbeit: zuerst wurde die Suche für einen einzelnen Agenten als korrekt bewiesen, statt alles gleichzeitig zu bauen und gemeinsam zu debuggen.
-* **Warum Hindernisse Kugeln sind, kein Octree beliebiger Meshes.** Eine Kugel ist das einfachste 3D-Kollisionsprimitiv, das trotzdem real und geometrisch korrekt ist - kein Bounding-Box-Ersatz für etwas Detaillierteres. Ein Octree/BVH wird erst relevant, wenn eine Szene genug Kollidierer hat, damit die Brute-Force-Prüfung zum Flaschenhals wird - die heutige Schwarmzelle (eine Handvoll Arme und statische Sicherheitszonen) hat das nicht.
+* **Warum Hindernisse Kugeln sind, kein Octree beliebiger Meshes.** Eine Kugel ist das einfachste 3D-Kollisionsprimitiv, das trotzdem real und geometrisch korrekt ist - kein Bounding-Box-Ersatz für etwas Detaillierteres. Eine Hüllkörperhierarchie über den Kugeln (`ObstacleIndex`) hält die Prüfungen in einer vollen Szene bereits schnell, ein Octree wäre also nur für beliebige Netze relevant, die dieser Planer nicht annimmt; die heutige Schwarmzelle (eine Handvoll Arme und statische Sicherheitszonen) ist ohnehin klein.
 * **Warum dies heute eine CLI über eine JSON-Szenariodatei ist, kein Netzwerkdienst.** Die Wahl zwischen HTTP und dem geteilten gRPC-Vertrag des Ökosystems (`hydra.common.v1`, siehe `HYDRA-UMC-ORCHESTRATOR/proto/`) ist eine echte Protokollentscheidung, die einen eigenen Durchgang verdient, sobald HYDRA-UMC-JOB-DISPATCHER wirklich bereit ist, diesen Dienst aufzurufen. Die CLI ist schon heute wirklich benutzbar (`run.bat scenarios/example.json`), sie ist nur noch nicht ans Netzwerk angeschlossen.
 * **Wie sich das ins restliche Ökosystem einfügt.** Ein Geschwisterdienst unter HYDRA-UMC-ORCHESTRATOR - plant die Routen, denen die von HYDRA-UMC-JOB-DISPATCHER zugewiesenen Aufträge tatsächlich folgen, gedacht zur Gegenprüfung mit HYDRA-UMC-TWIN, bevor sich real irgendetwas bewegt (heute nicht verdrahtet: nichts schickt eine geplante Route an den Zwilling).
 * **Warum `max_duration_ms` eine Prüfung der realen Uhr ist, nicht nur ein niedrigeres `max_iterations`.** Die Iterationsanzahl allein kann die reale Zeit nicht begrenzen: Eine Szene mit dichteren Hindernissen macht die Kollisionsprüfungen jeder Iteration proportional langsamer, sodass dasselbe Iterationsbudget auf einer pathologischen Szene eine völlig andere reale Zeit benötigen kann als auf einer offenen. Ein Planeraufruf in einer Echtzeit-Regelschleife braucht ein echtes Zeitbudget, kein Ersatz dafür.
@@ -126,7 +126,7 @@ cargo test
 
 ## 🧪 Tests
 
-93 automatische Tests laufen mit `cargo test`. Sie brauchen weder Hardware noch etwas außerhalb dieses Rechners.
+99 automatische Tests laufen mit `cargo test`. Sie brauchen weder Hardware noch etwas außerhalb dieses Rechners.
 
 Die CI führt `HYDRA_UMC_CI=1 python tools/ci_validate.py` aus; das prüft das Manifest, die Dokumente, die acht READMEs und die Bilder.
 
@@ -183,7 +183,7 @@ Suche auszuführen:
 cargo test   # Geometrie + Hinderniskollision, den PRNG, den RRT-Planer
              # (einschließlich seines echten Zeitlimits nach der Uhr)
              # und die Sicherheitsnachprüfung von validate.rs -
-             # 93 Tests insgesamt
+             # 99 Tests insgesamt
 ```
 
 ## 📂 Struktur des Repositorys

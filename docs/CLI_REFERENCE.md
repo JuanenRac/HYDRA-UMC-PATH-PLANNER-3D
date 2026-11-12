@@ -274,6 +274,6 @@ A small HTTP listener that plans nothing and takes no scenario. It answers `GET 
 Planning is a CLI driven by local JSON files: there is no HTTP/gRPC endpoint
 that plans (see the module doc at the top of `src/main.rs` for why exposing
 one is deferred). It also plans one agent per call, not
-true swarm-wide multi-robot coordination, and does not yet do
-octree-accelerated collision checks at scale — real, deliberately
-deferred future work, not forgotten.
+true swarm-wide multi-robot coordination — real, deliberately
+deferred future work, not forgotten. Collision checks go through a
+bounding-volume hierarchy built once per call.

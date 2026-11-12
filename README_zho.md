@@ -18,14 +18,14 @@ GPL-3.0-or-later - see LICENSE
   <img src="https://img.shields.io/badge/License-GPL%203.0--or--later-blue.svg" alt="GPL 3.0 or later">
   <img src="https://img.shields.io/badge/Algorithm-RRT-orange.svg" alt="Algorithm">
   <img src="https://img.shields.io/badge/Engine-Rust-blue.svg" alt="Engine">
-  <img src="https://img.shields.io/badge/Tests-93%20passing-2ea44f.svg" alt="Tests">
+  <img src="https://img.shields.io/badge/Tests-99%20passing-2ea44f.svg" alt="Tests">
   <img src="https://img.shields.io/badge/Version-0.1.4-0f6cbd.svg" alt="Version">
   <img src="https://img.shields.io/badge/Maturity-functional-0F6CBD.svg" alt="Maturity">
 </p>
 
 ---
 
-**诚实核查——今天真正能跑起来的部分：** `src/rrt.rs` 中的单智能体 RRT 搜索（带有真实的、独立于 `max_iterations` 的挂钟时间截止 `max_duration_ms`）、`src/obstacle.rs` 的球体/线段碰撞数学、`src/geometry.rs` 的向量数学、`src/rng.rs` 的确定性 PRNG、`src/semantics.rs` 的场景校验关卡，以及 `src/validate.rs` 对已计算路径的安全性复检，都是真实且经过测试的（93 个测试，`cargo test`）——每一条返回的路径都在测试中被验证为真正无障碍，而不只是看起来合理。CLI（`run.sh scenarios/example.json`，加上 `validate` 子命令）今天确实可用。仍然只是设想的部分：这是一个单线程的 RRT（另有带重连步骤的 RRT* 模式，默认关闭，`optimize_iterations`），不是多机器人协调器——本 README 其他地方出现的"最多可同时为 32+ 台机器人"和"亚 50ms 的路径生成"描述的是未来目标，不是实测结果；本仓库中完全没有任何 C++ 代码（Cargo.toml 恰好只有两个依赖，`serde`/`serde_json`，没有任何并行/线程 crate），而且它目前是一个基于 JSON 场景文件的 CLI，还不是连接到 HYDRA-UMC-JOB-DISPATCHER 的网络服务，也没有对照一个真实运行中的 HYDRA-UMC-TWIN 做过验证。已交付的具体内容见 `CHANGELOG.md`，被刻意推迟的内容及原因的完整、诚实清单见 `mejoras_futuras.txt`。
+**诚实核查——今天真正能跑起来的部分：** `src/rrt.rs` 中的单智能体 RRT 搜索（带有真实的、独立于 `max_iterations` 的挂钟时间截止 `max_duration_ms`）、`src/obstacle.rs` 的球体/线段碰撞数学、`src/geometry.rs` 的向量数学、`src/rng.rs` 的确定性 PRNG、`src/semantics.rs` 的场景校验关卡，以及 `src/validate.rs` 对已计算路径的安全性复检，都是真实且经过测试的（99 个测试，`cargo test`）——每一条返回的路径都在测试中被验证为真正无障碍，而不只是看起来合理。CLI（`run.sh scenarios/example.json`，加上 `validate` 子命令）今天确实可用。仍然只是设想的部分：这是一个单线程的 RRT（另有带重连步骤的 RRT* 模式，默认关闭，`optimize_iterations`），不是多机器人协调器——本 README 其他地方出现的"最多可同时为 32+ 台机器人"和"亚 50ms 的路径生成"描述的是未来目标，不是实测结果；本仓库中完全没有任何 C++ 代码（Cargo.toml 恰好只有两个依赖，`serde`/`serde_json`，没有任何并行/线程 crate），而且它目前是一个基于 JSON 场景文件的 CLI，还不是连接到 HYDRA-UMC-JOB-DISPATCHER 的网络服务，也没有对照一个真实运行中的 HYDRA-UMC-TWIN 做过验证。已交付的具体内容见 `CHANGELOG.md`，被刻意推迟的内容及原因的完整、诚实清单见 `mejoras_futuras.txt`。
 
 ---
 
@@ -39,7 +39,7 @@ GPL-3.0-or-later - see LICENSE
 |---|---|
 | 版本 | `0.1.4` |
 | 成熟度 | 可用 |
-| 测试 | 93 (`cargo test`) |
+| 测试 | 99 (`cargo test`) |
 | 技术栈 | Rust / RRT* path planning |
 | 真实硬件 | 尚未：此版本没有在真实硬件上运行的记录 |
 
@@ -54,7 +54,7 @@ GPL-3.0-or-later - see LICENSE
 | 领域 | 状态 | 在这里的含义 |
 |---|---|---|
 | 软件 | 🟡 | 主要用途可用；上面的诚实性检查列出了仍然缺少的内容 |
-| 测试 | 🟢 | 93 项自动测试，每次变更都会运行 |
+| 测试 | 🟢 | 99 项自动测试，每次变更都会运行 |
 | 真实硬件 | 🔴 | 尚未：此版本没有在真实硬件上运行的记录 |
 | 集成 | 🟠 | 其消息和路由已对照 SDK 的共享契约检查；尚未与真实设备一起运行 |
 | 部署 | 🟠 | 已作为发布版本公开；在干净机器上安装有文档，但没有记录 |
@@ -110,7 +110,7 @@ flowchart TB
 * **为何 3D 无碰撞规划是独立的服务。** 在实时 3D 场景（单元内的每个机器人、工具和障碍物）上进行路径搜索，其对 CPU 的消耗和对延迟的敏感度与任务调度本身截然不同——将其隔离出来，意味着一次缓慢的规划查询永远不会阻塞 HYDRA-UMC-JOB-DISPATCHER 分配其他工作。
 * **与 HYDRA-UMC-TWIN 的验证是计划中的，尚未完成。** HYDRA-UMC-TWIN 目前只读取项目清单：它没有物理或仿真，因此在规划路径送往真实机械臂之前，没有任何东西检查扭矩极限或奇异点。`validate` 只检查障碍物、工作空间和路径的两端，仅此而已。
 * **为何搜索算法默认是一个普通的 RRT（仅在要求时才用 RRT*），而非多机器人协调器。** `src/rrt.rs` 实现了一个真实、经过测试的 Rapidly-exploring Random Tree 搜索——单一代理、静态障碍物集合、真正无碰撞的结果（每条返回的路径都在测试中验证为真实无障碍物，而不仅仅是看起来合理）。RRT*（一个提升最优性的重连环节）也已实现，默认关闭（`optimize_iterations`），因此经过验证的单一代理搜索仍是默认；真正的多机器人同步规划（本 README 中描述的“同时最多 32+ 台机器人”）是真实、故意留待后续的工作：先证明单一代理搜索的正确性，而不是一次性构建全部并一起调试。
-* **为何障碍物是球体，而非任意网格的八叉树。** 球体是最简单且仍然真实、在几何上正确的 3D 碰撞基本图形——而非用包围盒来代替更详细的形状。只有当场景中的碰撞体够多、到使得暴力检测成为瓶颈时，八叉树/BVH 才开始变得重要——今天的集群单元（少量机器臂和静态安全区）还远未达到那个规模。
+* **为何障碍物是球体，而非任意网格的八叉树。** 球体是最简单且仍然真实、在几何上正确的 3D 碰撞基本图形——而非用包围盒来代替更详细的形状。球体之上的包围体层次结构（`ObstacleIndex`）已让碰撞检测在拥挤场景中保持快速，因此八叉树只对任意网格才有意义，而本规划器不接受网格；今天的集群单元（少量机器臂和静态安全区）本来就很小。
 * **为何这个项目今天是在 JSON 场景文件上运行的 CLI，而非网络服务。** 在 HTTP 和生态系统共享的 gRPC 契约（`hydra.common.v1`，见 `HYDRA-UMC-ORCHESTRATOR/proto/`）之间选择，是一个真实的协议决策，值得在 HYDRA-UMC-JOB-DISPATCHER 真正准备调用该服务时再单独处理。这个 CLI 今天已经真正可用（`run.bat scenarios/example.json`），只是还未接入网络。
 * **这如何融入生态系统的其余部分。** 作为 HYDRA-UMC-ORCHESTRATOR 下的同级服务——为 HYDRA-UMC-JOB-DISPATCHER 分配的任务规划其实际遵循的路线，并计划在任何真实移动发生之前与 HYDRA-UMC-TWIN 进行交叉验证（目前尚未接通：没有任何组件把规划好的路线发送给孪生体）。
 * **为何 `max_duration_ms` 是一次真实时钟检查，而不仅仅是更低的 `max_iterations`。** 单靠迭代次数无法限制真实时间：障碍物更密集的场景会让每次迭代的碰撞检测成比例地变慢，因此同样的迭代预算在一个病态场景和一个开阔场景上耗费的真实时间可能天差地别。处于实时控制循环中的规划器调用需要一个真正的时间预算，而不是它的替代品。
@@ -128,7 +128,7 @@ cargo test
 
 ## 🧪 测试
 
-运行 `cargo test` 会执行 93 个自动测试。 不需要硬件，也不需要这台机器以外的任何东西。
+运行 `cargo test` 会执行 99 个自动测试。 不需要硬件，也不需要这台机器以外的任何东西。
 
 CI 运行 `HYDRA_UMC_CI=1 python tools/ci_validate.py`，检查清单、文档、八个 README 和图片。
 
@@ -177,7 +177,7 @@ run.bat scenarios/example.json
 ```bash
 cargo test   # 几何学 + 障碍物碰撞数学、PRNG、RRT 规划器本身
              #（包括其真实的时钟时间限制），以及 validate.rs 的
-             # 安全性复核——共 93 个测试
+             # 安全性复核——共 99 个测试
 ```
 
 ## 📂 仓库结构
