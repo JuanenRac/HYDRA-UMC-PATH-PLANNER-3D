@@ -56,6 +56,73 @@ impl Obstacle {
     }
 }
 
+/// An axis-aligned box obstacle (a zone with flat sides, a shelf, a table): `min` and `max` are its opposite corners, in metres. The robot is a
+/// sphere, so the box is inflated by the clearance on every side; the rounded corners the sphere would leave are counted as filled, which keeps
+/// the check on the safe side.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+pub struct BoxObstacle {
+    pub min: Vec3,
+    pub max: Vec3,
+}
+
+impl BoxObstacle {
+    /// True if `point` is inside this box inflated by `clearance`.
+    pub fn contains_point(&self, point: Vec3, clearance: f64) -> bool {
+        point.x >= self.min.x - clearance
+            && point.x <= self.max.x + clearance
+            && point.y >= self.min.y - clearance
+            && point.y <= self.max.y + clearance
+            && point.z >= self.min.z - clearance
+            && point.z <= self.max.z + clearance
+    }
+
+    /// True if the segment `a`-`b` touches this box inflated by `clearance` (the slab test: the interval of the segment that is inside the
+    /// slab of each axis must not be empty).
+    pub fn intersects_segment(&self, a: Vec3, b: Vec3, clearance: f64) -> bool {
+        let mut t_enter = 0.0f64;
+        let mut t_leave = 1.0f64;
+        let axes = [
+            (
+                a.x,
+                b.x - a.x,
+                self.min.x - clearance,
+                self.max.x + clearance,
+            ),
+            (
+                a.y,
+                b.y - a.y,
+                self.min.y - clearance,
+                self.max.y + clearance,
+            ),
+            (
+                a.z,
+                b.z - a.z,
+                self.min.z - clearance,
+                self.max.z + clearance,
+            ),
+        ];
+        for (start, delta, low, high) in axes {
+            if delta.abs() < 1e-12 {
+                if start < low || start > high {
+                    return false;
+                }
+            } else {
+                let mut t1 = (low - start) / delta;
+                let mut t2 = (high - start) / delta;
+                if t1 > t2 {
+                    std::mem::swap(&mut t1, &mut t2);
+                }
+                t_enter = t_enter.max(t1);
+                t_leave = t_leave.min(t2);
+                if t_enter > t_leave {
+                    return false;
+                }
+            }
+        }
+        true
+    }
+}
+
 /// Boxes are padded by this much so that rounding can never make the
 /// hierarchy skip an obstacle the exact check would report.
 const BOX_MARGIN: f64 = 1e-9;
@@ -147,6 +214,7 @@ enum Node {
 /// A bounding-volume hierarchy over a fixed set of spherical obstacles.
 #[derive(Debug)]
 pub struct ObstacleIndex {
+    boxes: Vec<BoxObstacle>,
     obstacles: Vec<Obstacle>,
     nodes: Vec<Node>,
 }
@@ -162,9 +230,17 @@ impl ObstacleIndex {
             Self::build(&mut ordered, 0, len, &mut nodes);
         }
         ObstacleIndex {
+            boxes: Vec::new(),
             obstacles: ordered,
             nodes,
         }
+    }
+
+    /// The same hierarchy, plus the boxes of the scenario (tested one by one: a scene has few of them).
+    pub fn with_boxes(obstacles: &[Obstacle], boxes: &[BoxObstacle]) -> Self {
+        let mut index = Self::new(obstacles);
+        index.boxes = boxes.to_vec();
+        index
     }
 
     fn build(items: &mut [Obstacle], first: usize, end: usize, nodes: &mut Vec<Node>) -> usize {
@@ -225,6 +301,14 @@ impl ObstacleIndex {
     /// True if the segment `a`-`b` comes within `clearance` of any obstacle;
     /// the same answer as `obstacles.iter().any(|o| o.intersects_segment(..))`.
     pub fn any_intersects_segment(&self, a: Vec3, b: Vec3, clearance: f64) -> bool {
+        // the boxes of a scenario are few: each one is tested on its own
+        if self
+            .boxes
+            .iter()
+            .any(|b_box| b_box.intersects_segment(a, b, clearance))
+        {
+            return true;
+        }
         if self.nodes.is_empty() {
             return false;
         }
@@ -420,5 +504,95 @@ mod tests {
         let a = Vec3::new(0.0, 0.0, 0.0);
         let b = Vec3::new(10.0, 0.0, 0.0);
         assert!(!o.intersects_segment(a, b, 0.0));
+    }
+}
+
+#[cfg(test)]
+mod box_tests {
+    use super::*;
+
+    fn wall() -> BoxObstacle {
+        BoxObstacle {
+            min: Vec3::new(-0.5, -1.0, -1.0),
+            max: Vec3::new(0.5, 1.0, 1.0),
+        }
+    }
+
+    #[test]
+    fn a_point_is_inside_the_box_inflated_by_the_clearance() {
+        let b = wall();
+        assert!(b.contains_point(Vec3::new(0.0, 0.0, 0.0), 0.0));
+        assert!(
+            b.contains_point(Vec3::new(0.5, 1.0, 1.0), 0.0),
+            "the faces count as inside"
+        );
+        assert!(!b.contains_point(Vec3::new(0.6, 0.0, 0.0), 0.0));
+        assert!(b.contains_point(Vec3::new(0.6, 0.0, 0.0), 0.1));
+        assert!(!b.contains_point(Vec3::new(0.0, 1.2, 0.0), 0.1));
+    }
+
+    #[test]
+    fn a_segment_through_the_box_or_grazing_its_inflated_face_is_a_hit() {
+        let b = wall();
+        assert!(b.intersects_segment(Vec3::new(-2.0, 0.0, 0.0), Vec3::new(2.0, 0.0, 0.0), 0.0));
+        assert!(!b.intersects_segment(Vec3::new(-2.0, 2.0, 0.0), Vec3::new(2.0, 2.0, 0.0), 0.0));
+        assert!(b.intersects_segment(Vec3::new(-2.0, 1.05, 0.0), Vec3::new(2.0, 1.05, 0.0), 0.1));
+        assert!(!b.intersects_segment(Vec3::new(-2.0, 1.2, 0.0), Vec3::new(2.0, 1.2, 0.0), 0.1));
+    }
+
+    #[test]
+    fn a_segment_that_stops_short_or_lies_beside_the_box_is_not_a_hit() {
+        let b = wall();
+        assert!(!b.intersects_segment(Vec3::new(-3.0, 0.0, 0.0), Vec3::new(-1.0, 0.0, 0.0), 0.0));
+        assert!(b.intersects_segment(Vec3::new(-3.0, 0.0, 0.0), Vec3::new(0.0, 0.0, 0.0), 0.0));
+        // a segment parallel to an axis, outside the slab of that axis
+        assert!(!b.intersects_segment(Vec3::new(0.0, 0.0, 2.0), Vec3::new(0.0, 0.0, 3.0), 0.0));
+        // a zero-length segment is a point
+        assert!(b.intersects_segment(Vec3::new(0.0, 0.0, 0.0), Vec3::new(0.0, 0.0, 0.0), 0.0));
+        assert!(!b.intersects_segment(Vec3::new(2.0, 0.0, 0.0), Vec3::new(2.0, 0.0, 0.0), 0.0));
+    }
+
+    #[test]
+    fn the_segment_test_agrees_with_dense_sampling() {
+        let b = wall();
+        let mut state = 12345u64;
+        let mut next = || {
+            state = state
+                .wrapping_mul(6364136223846793005)
+                .wrapping_add(1442695040888963407);
+            ((state >> 33) as f64 / (1u64 << 31) as f64) * 6.0 - 3.0
+        };
+        for _ in 0..400 {
+            let a = Vec3::new(next(), next(), next());
+            let c = Vec3::new(next(), next(), next());
+            let sampled = (0..=2000).any(|i| {
+                let t = f64::from(i) / 2000.0;
+                b.contains_point(a.add(c.sub(a).scale(t)), 0.05)
+            });
+            if sampled {
+                assert!(b.intersects_segment(a, c, 0.05), "{a:?} -> {c:?}");
+            }
+        }
+    }
+
+    #[test]
+    fn the_index_with_boxes_reports_a_box_even_when_there_is_no_sphere() {
+        let index = ObstacleIndex::with_boxes(&[], &[wall()]);
+        assert!(index.any_intersects_segment(
+            Vec3::new(-2.0, 0.0, 0.0),
+            Vec3::new(2.0, 0.0, 0.0),
+            0.1
+        ));
+        assert!(!index.any_intersects_segment(
+            Vec3::new(-2.0, 3.0, 0.0),
+            Vec3::new(2.0, 3.0, 0.0),
+            0.1
+        ));
+        let plain = ObstacleIndex::new(&[]);
+        assert!(!plain.any_intersects_segment(
+            Vec3::new(-2.0, 0.0, 0.0),
+            Vec3::new(2.0, 0.0, 0.0),
+            0.1
+        ));
     }
 }

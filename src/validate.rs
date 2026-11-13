@@ -15,7 +15,7 @@
 // second path planner.
 
 use crate::geometry::Vec3;
-use crate::obstacle::Obstacle;
+use crate::obstacle::{BoxObstacle, Obstacle};
 use crate::rrt::Workspace;
 use serde::Serialize;
 
@@ -84,6 +84,18 @@ pub fn validate_path(
     workspace: &Workspace,
     robot_radius: f64,
 ) -> Vec<PathSafetyIssue> {
+    validate_path_with_boxes(path, obstacles, &[], workspace, robot_radius)
+}
+
+/// `validate_path`, with the box obstacles of the scenario checked as well as the spheres. It does not use the planner's index: every
+/// obstacle is tested against every waypoint and segment on purpose.
+pub fn validate_path_with_boxes(
+    path: &[Vec3],
+    obstacles: &[Obstacle],
+    boxes: &[BoxObstacle],
+    workspace: &Workspace,
+    robot_radius: f64,
+) -> Vec<PathSafetyIssue> {
     if path.is_empty() {
         return vec![PathSafetyIssue::EmptyPath];
     }
@@ -97,6 +109,9 @@ pub fn validate_path(
         return vec![PathSafetyIssue::InvalidScenario { reason }];
     }
     if let Err(reason) = crate::semantics::validate_obstacles(obstacles) {
+        return vec![PathSafetyIssue::InvalidScenario { reason }];
+    }
+    if let Err(reason) = crate::semantics::validate_boxes(boxes) {
         return vec![PathSafetyIssue::InvalidScenario { reason }];
     }
     if let Err(reason) = crate::semantics::validate_workspace(workspace) {
@@ -119,6 +134,7 @@ pub fn validate_path(
         if obstacles
             .iter()
             .any(|o| o.contains_point(point, robot_radius))
+            || boxes.iter().any(|b| b.contains_point(point, robot_radius))
         {
             issues.push(PathSafetyIssue::WaypointInsideObstacle { index, point });
         }
@@ -132,6 +148,9 @@ pub fn validate_path(
         if obstacles
             .iter()
             .any(|o| o.intersects_segment(a, b, robot_radius))
+            || boxes
+                .iter()
+                .any(|bx| bx.intersects_segment(a, b, robot_radius))
         {
             issues.push(PathSafetyIssue::SegmentIntersectsObstacle {
                 from_index,
