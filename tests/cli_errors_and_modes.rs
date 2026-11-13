@@ -531,6 +531,10 @@ fn the_fleet_command_plans_the_robots_in_order_and_reports_each() {
         Path::new("fleet"),
         Path::new("definitely-missing-fleet.json"),
     ]);
+    assert_eq!(code, Some(1));
+    assert!(stderr.contains("could not read"), "{stderr}");
+}
+
 const ARM: &str = r#"{"arm":{"joints":[
     {"name":"shoulder","origin":{"x":0,"y":0,"z":0},"axis":{"x":0,"y":0,"z":1},"lower":-3.0,"upper":3.0},
     {"name":"elbow","origin":{"x":1,"y":0,"z":0},"axis":{"x":0,"y":0,"z":1},"lower":-3.0,"upper":3.0}],
