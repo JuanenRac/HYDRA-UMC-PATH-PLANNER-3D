@@ -325,7 +325,10 @@ fn main() -> ExitCode {
     eprintln!("HYDRA-UMC-PATH-PLANNER-3D v{VERSION}");
     eprintln!("Path planner: computes collision-free RRT paths for one agent through a static obstacle set.");
 
-    let args: Vec<String> = env::args().collect();
+    let mut args: Vec<String> = env::args().collect();
+    // Off unless asked for: one exit status (1) for every failure, as before. With --exit-codes a caller can tell the causes apart.
+    let distinct_codes = args.iter().skip(1).any(|a| a == "--exit-codes");
+    args.retain(|a| a != "--exit-codes");
 
     // serve is the only way the program listens on a network, and it is never started without being asked for.
     if args.get(1).map(String::as_str) == Some("serve") {
@@ -365,7 +368,7 @@ fn main() -> ExitCode {
     }
 
     let Some(scenario_path) = args.get(1) else {
-        eprintln!("Usage: hydra-umc-path-planner-3d <scenario.json>");
+        eprintln!("Usage: hydra-umc-path-planner-3d <scenario.json>   (\"-\" reads the scenario from standard input; add --exit-codes for 1 no path, 2 invalid input, 3 time limit)");
         eprintln!("       hydra-umc-path-planner-3d validate <scenario.json> <path.json>");
         eprintln!("       hydra-umc-path-planner-3d shrink <scenario.json> [--out <minimal.json>]");
         eprintln!("       hydra-umc-path-planner-3d serve [--addr HOST:PORT] [--token TOKEN] [--allow-anonymous] [--config FILE]   (off unless asked for; GET /health, and GET /metrics only when the configuration opens it)");
@@ -373,11 +376,18 @@ fn main() -> ExitCode {
         return ExitCode::SUCCESS; // printing identity and usage is a valid no-arg invocation, not a failure
     };
 
-    let raw = match fs::read_to_string(scenario_path) {
+    // "-" reads the scenario from standard input, so a caller can plan without a file in between.
+    let read = if scenario_path == "-" {
+        let mut text = String::new();
+        std::io::Read::read_to_string(&mut std::io::stdin(), &mut text).map(|_| text)
+    } else {
+        fs::read_to_string(scenario_path)
+    };
+    let raw = match read {
         Ok(raw) => raw,
         Err(e) => {
             eprintln!("[path-planner-3d] could not read {scenario_path}: {e}");
-            return ExitCode::FAILURE;
+            return failure_code("invalid_input", distinct_codes);
         }
     };
 
@@ -385,7 +395,7 @@ fn main() -> ExitCode {
         Ok(s) => s,
         Err(e) => {
             eprintln!("[path-planner-3d] could not parse {scenario_path}: {e}");
-            return ExitCode::FAILURE;
+            return failure_code("invalid_input", distinct_codes);
         }
     };
 
@@ -399,7 +409,7 @@ fn main() -> ExitCode {
                 Ok(json) => println!("{json}"),
                 Err(e) => eprintln!("[path-planner-3d] could not serialize result: {e}"),
             }
-            return ExitCode::FAILURE;
+            return failure_code("invalid_input", distinct_codes);
         }
     };
     let config = scenario.config.unwrap_or_default();
@@ -420,6 +430,10 @@ fn main() -> ExitCode {
     };
 
     let is_ok = matches!(outcome, PlanOutcome::Ok { .. });
+    let failure_reason = match &outcome {
+        PlanOutcome::Error { reason } => reason.clone(),
+        PlanOutcome::Ok { .. } => String::new(),
+    };
     match serde_json::to_string_pretty(&outcome) {
         Ok(json) => println!("{json}"),
         Err(e) => {
@@ -431,7 +445,60 @@ fn main() -> ExitCode {
     if is_ok {
         ExitCode::SUCCESS
     } else {
-        ExitCode::FAILURE
+        failure_code(&failure_reason, distinct_codes)
+    }
+}
+
+/// The exit status of a failed plan. Without `--exit-codes` it is always 1. With it: 1 no path was found, 2 the input was invalid
+/// (an unreadable or malformed scenario, or a start or goal that cannot be used), 3 the time limit was hit.
+fn failure_code(reason: &str, distinct: bool) -> ExitCode {
+    if !distinct {
+        return ExitCode::FAILURE;
+    }
+    match reason {
+        "no_path_found" => ExitCode::from(1),
+        "time_limit_exceeded" => ExitCode::from(3),
+        _ => ExitCode::from(2),
+    }
+}
+
+#[cfg(test)]
+mod exit_code_tests {
+    use super::*;
+
+    #[test]
+    fn without_the_switch_every_failure_is_one() {
+        for reason in [
+            "no_path_found",
+            "time_limit_exceeded",
+            "invalid_input",
+            "start_inside_obstacle",
+        ] {
+            assert_eq!(
+                format!("{:?}", failure_code(reason, false)),
+                format!("{:?}", ExitCode::FAILURE)
+            );
+        }
+    }
+
+    #[test]
+    fn with_the_switch_the_cause_is_told_apart() {
+        assert_eq!(
+            format!("{:?}", failure_code("no_path_found", true)),
+            format!("{:?}", ExitCode::from(1))
+        );
+        assert_eq!(
+            format!("{:?}", failure_code("time_limit_exceeded", true)),
+            format!("{:?}", ExitCode::from(3))
+        );
+        assert_eq!(
+            format!("{:?}", failure_code("goal_inside_obstacle", true)),
+            format!("{:?}", ExitCode::from(2))
+        );
+        assert_eq!(
+            format!("{:?}", failure_code("invalid_input", true)),
+            format!("{:?}", ExitCode::from(2))
+        );
     }
 }
 

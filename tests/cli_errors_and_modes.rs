@@ -287,3 +287,49 @@ fn validate_accepts_a_path_file_with_a_frame_and_refuses_another_frame() {
     let (code, stdout, _) = run(&[Path::new("validate"), &bare_scenario, &same]);
     assert_eq!(code, Some(1), "{stdout}");
 }
+
+#[test]
+fn the_exit_codes_tell_the_causes_apart_only_when_asked_and_a_scenario_can_come_from_standard_input(
+) {
+    use std::io::Write;
+    use std::process::Stdio;
+    let wall = temp(
+        "wall.json",
+        r#"{"start":{"x":0,"y":0,"z":0},"goal":{"x":2,"y":0,"z":0},
+  "obstacles":[{"center":{"x":2,"y":0,"z":0},"radius":0.5}],
+  "workspace":{"min":{"x":-5,"y":-5,"z":-5},"max":{"x":5,"y":5,"z":5}},"seed":7}"#,
+    );
+    let (code, _, _) = run(&[&wall]);
+    assert_eq!(code, Some(1)); // as before: one status for every failure
+    let (code, stdout, _) = run(&[&wall, Path::new("--exit-codes")]);
+    assert_eq!(code, Some(2), "{stdout}"); // the goal is inside an obstacle: invalid input
+    let bad = temp("bad-codes.json", "{not json");
+    let (code, _, _) = run(&[Path::new("--exit-codes"), &bad]);
+    assert_eq!(code, Some(2));
+    let (code, _, _) = run(&[
+        Path::new("--exit-codes"),
+        Path::new("definitely-missing-scenario.json"),
+    ]);
+    assert_eq!(code, Some(2));
+
+    let mut child = Command::new(env!("CARGO_BIN_EXE_hydra-umc-path-planner-3d"))
+        .arg("-")
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .unwrap();
+    child
+        .stdin
+        .take()
+        .unwrap()
+        .write_all(OPEN.as_bytes())
+        .unwrap();
+    let output = child.wait_with_output().unwrap();
+    assert_eq!(output.status.code(), Some(0));
+    assert!(
+        String::from_utf8_lossy(&output.stdout).contains("\"status\": \"ok\""),
+        "{}",
+        String::from_utf8_lossy(&output.stdout)
+    );
+}
