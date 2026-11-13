@@ -362,3 +362,76 @@ fn output_decimals_rounds_the_coordinates_and_a_bad_value_is_refused() {
     assert_eq!(code, Some(1), "{stdout}");
     assert!(stdout.contains("output_decimals"), "{stdout}");
 }
+
+const WALL_WITH_A_GAP: &str = r#"{"start":{"x":-3,"y":0,"z":0},"goal":{"x":3,"y":0,"z":0},
+  "boxes":[{"min":{"x":-0.2,"y":-5,"z":-5},"max":{"x":0.2,"y":1,"z":5}}],
+  "workspace":{"min":{"x":-5,"y":-5,"z":-5},"max":{"x":5,"y":5,"z":5}},"seed":3}"#;
+
+#[test]
+fn a_box_obstacle_is_avoided_by_the_plan_and_caught_by_the_validator() {
+    let scenario = temp("wall.json", WALL_WITH_A_GAP);
+    let (code, stdout, _) = run(&[&scenario]);
+    assert_eq!(code, Some(0), "{stdout}");
+    let parsed: serde_json::Value = serde_json::from_str(&stdout).unwrap();
+    let path: Vec<[f64; 3]> = parsed["path"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|p| {
+            [
+                p["x"].as_f64().unwrap(),
+                p["y"].as_f64().unwrap(),
+                p["z"].as_f64().unwrap(),
+            ]
+        })
+        .collect();
+    // no point of the path, sampled along every segment, is inside the wall
+    for pair in path.windows(2) {
+        for i in 0..=200 {
+            let t = f64::from(i) / 200.0;
+            let p = [0, 1, 2].map(|k| pair[0][k] + (pair[1][k] - pair[0][k]) * t);
+            let inside = p[0] >= -0.2 && p[0] <= 0.2 && p[1] <= 1.0 && p[1] >= -5.0;
+            assert!(!inside, "{p:?} is inside the box");
+        }
+    }
+    // the same path validates as safe against the scenario that made it
+    let planned = temp("wall-path.json", &stdout);
+    let (code, stdout, _) = run(&[Path::new("validate"), &scenario, &planned]);
+    assert_eq!(code, Some(0), "{stdout}");
+    // a straight line through the wall does not
+    let straight = temp(
+        "wall-straight.json",
+        r#"[{"x":-3,"y":0,"z":0},{"x":3,"y":0,"z":0}]"#,
+    );
+    let (code, stdout, _) = run(&[Path::new("validate"), &scenario, &straight]);
+    assert_eq!(code, Some(1), "{stdout}");
+    assert!(stdout.contains("SegmentIntersectsObstacle"), "{stdout}");
+}
+
+#[test]
+fn a_goal_inside_a_box_a_wrong_box_and_the_shrink_of_a_box_scenario_are_refused() {
+    let inside = temp(
+        "box-goal.json",
+        r#"{"start":{"x":-3,"y":0,"z":0},"goal":{"x":0,"y":0,"z":0},
+  "boxes":[{"min":{"x":-1,"y":-1,"z":-1},"max":{"x":1,"y":1,"z":1}}],
+  "workspace":{"min":{"x":-5,"y":-5,"z":-5},"max":{"x":5,"y":5,"z":5}}}"#,
+    );
+    let (code, stdout, _) = run(&[&inside]);
+    assert_eq!(code, Some(1), "{stdout}");
+    assert!(stdout.contains("goal_inside_obstacle"), "{stdout}");
+
+    let inverted = temp(
+        "box-inverted.json",
+        r#"{"start":{"x":-3,"y":0,"z":0},"goal":{"x":3,"y":0,"z":0},
+  "boxes":[{"min":{"x":1,"y":0,"z":0},"max":{"x":-1,"y":1,"z":1}}],
+  "workspace":{"min":{"x":-5,"y":-5,"z":-5},"max":{"x":5,"y":5,"z":5}}}"#,
+    );
+    let (code, stdout, _) = run(&[&inverted]);
+    assert_eq!(code, Some(1), "{stdout}");
+    assert!(stdout.contains("InvertedBox"), "{stdout}");
+
+    let scenario = temp("wall-shrink.json", WALL_WITH_A_GAP);
+    let (code, _, stderr) = run(&[Path::new("shrink"), &scenario]);
+    assert_eq!(code, Some(1));
+    assert!(stderr.contains("box obstacles"), "{stderr}");
+}

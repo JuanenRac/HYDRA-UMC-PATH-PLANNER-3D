@@ -33,14 +33,14 @@ mod validate;
 mod corpus;
 
 use geometry::Vec3;
-use obstacle::Obstacle;
-use rrt::{plan, PlanError, PlannerConfig, Workspace};
+use obstacle::{BoxObstacle, Obstacle};
+use rrt::{plan_with_boxes, PlanError, PlannerConfig, Workspace};
 use serde::{Deserialize, Serialize};
 use shrink::{planner_output_is_unsafe, shrink_scenario};
 use std::env;
 use std::fs;
 use std::process::ExitCode;
-use validate::{check_endpoints, check_frame, validate_path, PathSafetyIssue};
+use validate::{check_endpoints, check_frame, validate_path_with_boxes, PathSafetyIssue};
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 
@@ -50,6 +50,9 @@ struct Scenario {
     goal: Vec3,
     #[serde(default)]
     obstacles: Vec<Obstacle>,
+    /// Box obstacles (opposite corners `min` and `max`, in metres), next to the spheres.
+    #[serde(default)]
+    boxes: Vec<BoxObstacle>,
     workspace: Workspace,
     #[serde(default)]
     config: Option<PlannerConfig>,
@@ -215,9 +218,10 @@ fn run_validate(scenario_path: &str, path_path: &str) -> ExitCode {
         }
     };
     let robot_radius = scenario.config.unwrap_or_default().robot_radius;
-    let mut issues = validate_path(
+    let mut issues = validate_path_with_boxes(
         &path,
         &scenario.obstacles,
+        &scenario.boxes,
         &scenario.workspace,
         robot_radius,
     );
@@ -291,6 +295,12 @@ fn run_shrink(scenario_path: &str, out_path: Option<&str>) -> ExitCode {
             return ExitCode::FAILURE;
         }
     };
+    if !scenario.boxes.is_empty() {
+        eprintln!(
+            "[path-planner-3d] shrink does not handle box obstacles yet: {scenario_path} has a boxes list"
+        );
+        return ExitCode::FAILURE;
+    }
     let resolved = scenario.resolve();
 
     let outcome = match planner_output_is_unsafe(&resolved) {
@@ -451,10 +461,11 @@ fn main() -> ExitCode {
     let config = scenario.config.unwrap_or_default();
     let seed = scenario.seed.unwrap_or(1);
 
-    let outcome = match plan(
+    let outcome = match plan_with_boxes(
         scenario.start,
         scenario.goal,
         &scenario.obstacles,
+        &scenario.boxes,
         scenario.workspace,
         config,
         seed,

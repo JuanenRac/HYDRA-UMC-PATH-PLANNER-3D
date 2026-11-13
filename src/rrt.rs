@@ -18,7 +18,7 @@
 
 use crate::geometry::Vec3;
 use crate::kdtree::KdTree;
-use crate::obstacle::{Obstacle, ObstacleIndex};
+use crate::obstacle::{BoxObstacle, Obstacle, ObstacleIndex};
 use crate::rng::Xorshift64Star;
 use serde::{Deserialize, Serialize};
 use std::time::{Duration, Instant};
@@ -150,6 +150,19 @@ pub fn plan(
     config: PlannerConfig,
     seed: u64,
 ) -> Result<Vec<Vec3>, PlanError> {
+    plan_with_boxes(start, goal, obstacles, &[], workspace, config, seed)
+}
+
+/// `plan`, with the box obstacles of the scenario as well as the spheres: the path keeps the robot radius away from both.
+pub fn plan_with_boxes(
+    start: Vec3,
+    goal: Vec3,
+    obstacles: &[Obstacle],
+    boxes: &[BoxObstacle],
+    workspace: Workspace,
+    config: PlannerConfig,
+    seed: u64,
+) -> Result<Vec<Vec3>, PlanError> {
     // reject a semantically invalid scenario before any real
     // geometry check runs against it - see semantics.rs's own module
     // doc for why a negative robot_radius/obstacle radius or an
@@ -158,6 +171,7 @@ pub fn plan(
     crate::semantics::validate_planner_config(&config).map_err(PlanError::InvalidInput)?;
     crate::semantics::validate_workspace(&workspace).map_err(PlanError::InvalidInput)?;
     crate::semantics::validate_obstacles(obstacles).map_err(PlanError::InvalidInput)?;
+    crate::semantics::validate_boxes(boxes).map_err(PlanError::InvalidInput)?;
     crate::semantics::validate_point(start).map_err(PlanError::InvalidInput)?;
     crate::semantics::validate_point(goal).map_err(PlanError::InvalidInput)?;
     crate::semantics::validate_workspace_fits_robot(&workspace, config.robot_radius)
@@ -172,12 +186,18 @@ pub fn plan(
     if obstacles
         .iter()
         .any(|o| o.contains_point(start, config.robot_radius))
+        || boxes
+            .iter()
+            .any(|b| b.contains_point(start, config.robot_radius))
     {
         return Err(PlanError::StartInsideObstacle);
     }
     if obstacles
         .iter()
         .any(|o| o.contains_point(goal, config.robot_radius))
+        || boxes
+            .iter()
+            .any(|b| b.contains_point(goal, config.robot_radius))
     {
         return Err(PlanError::GoalInsideObstacle);
     }
@@ -188,7 +208,7 @@ pub fn plan(
     }
 
     // one hierarchy for the whole search: every extension asks "is this segment clear?"
-    let index = ObstacleIndex::new(obstacles);
+    let index = ObstacleIndex::with_boxes(obstacles, boxes);
 
     if config.optimize_iterations > 0 {
         return plan_optimizing(start, goal, &index, workspace, config, seed);

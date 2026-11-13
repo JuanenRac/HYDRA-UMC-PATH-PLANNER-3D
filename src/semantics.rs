@@ -20,7 +20,7 @@
 // "no path found" verdict that looks like an honest planning outcome.
 
 use crate::geometry::Vec3;
-use crate::obstacle::Obstacle;
+use crate::obstacle::{BoxObstacle, Obstacle};
 use crate::rrt::{PlannerConfig, Workspace};
 use serde::Serialize;
 
@@ -36,6 +36,14 @@ pub enum InvalidScenarioReason {
     },
     NonFiniteWorkspaceBound,
     InvertedWorkspaceBound,
+    /// a corner of a box obstacle is not a finite number
+    NonFiniteBox {
+        index: usize,
+    },
+    /// the `min` corner of a box obstacle is above its `max` corner on some axis
+    InvertedBox {
+        index: usize,
+    },
     NonFinitePoint,
     NonFiniteStepSize,
     NonPositiveStepSize,
@@ -87,6 +95,19 @@ pub fn validate_obstacles(obstacles: &[Obstacle]) -> Result<(), InvalidScenarioR
         }
         if o.radius < 0.0 {
             return Err(InvalidScenarioReason::NegativeObstacleRadius { index });
+        }
+    }
+    Ok(())
+}
+
+/// Every corner of every box must be finite, and `min` must not be above `max` on any axis (an inverted box has no volume to avoid).
+pub fn validate_boxes(boxes: &[BoxObstacle]) -> Result<(), InvalidScenarioReason> {
+    for (index, b) in boxes.iter().enumerate() {
+        if !b.min.is_finite() || !b.max.is_finite() {
+            return Err(InvalidScenarioReason::NonFiniteBox { index });
+        }
+        if b.min.x > b.max.x || b.min.y > b.max.y || b.min.z > b.max.z {
+            return Err(InvalidScenarioReason::InvertedBox { index });
         }
     }
     Ok(())
