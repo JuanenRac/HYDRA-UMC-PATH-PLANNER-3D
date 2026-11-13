@@ -492,3 +492,45 @@ fn a_zones_file_that_cannot_be_read_or_holds_a_danger_zone_that_is_not_a_box_is_
     assert_eq!(code, Some(1), "{stdout}");
     assert!(stdout.contains("could not read the zones file"), "{stdout}");
 }
+
+#[test]
+fn the_fleet_command_plans_the_robots_in_order_and_reports_each() {
+    let fleet = temp(
+        "fleet.json",
+        r#"{"workspace":{"min":{"x":-5,"y":-5,"z":-5},"max":{"x":5,"y":5,"z":5}},
+  "robots":[
+    {"id":"a","start":{"x":-3,"y":0,"z":0},"goal":{"x":3,"y":0,"z":0},"seed":1},
+    {"id":"b","start":{"x":0,"y":-3,"z":0},"goal":{"x":0,"y":3,"z":0},"seed":2}]}"#,
+    );
+    let (code, stdout, _) = run(&[Path::new("fleet"), &fleet]);
+    assert_eq!(code, Some(0), "{stdout}");
+    let parsed: serde_json::Value = serde_json::from_str(&stdout).unwrap();
+    assert_eq!(parsed["status"], "ok");
+    let robots = parsed["robots"].as_array().unwrap();
+    assert_eq!(robots.len(), 2);
+    assert_eq!(robots[0]["id"], "a");
+    assert_eq!(robots[1]["id"], "b");
+    assert!(robots
+        .iter()
+        .all(|r| r["path"].as_array().is_some_and(|p| p.len() >= 2)));
+
+    let blocked = temp(
+        "fleet-blocked.json",
+        r#"{"workspace":{"min":{"x":-5,"y":-5,"z":-5},"max":{"x":5,"y":5,"z":5}},
+  "robots":[
+    {"id":"a","start":{"x":-3,"y":0,"z":0},"goal":{"x":3,"y":0,"z":0},"seed":1},
+    {"id":"b","start":{"x":0,"y":0,"z":0},"goal":{"x":0,"y":3,"z":0},"seed":2}]}"#,
+    );
+    let (code, stdout, _) = run(&[Path::new("fleet"), &blocked]);
+    assert_eq!(code, Some(1), "{stdout}");
+    let parsed: serde_json::Value = serde_json::from_str(&stdout).unwrap();
+    assert_eq!(parsed["status"], "partial");
+    assert_eq!(parsed["robots"][1]["reason"], "start_inside_obstacle");
+
+    let (code, _, stderr) = run(&[
+        Path::new("fleet"),
+        Path::new("definitely-missing-fleet.json"),
+    ]);
+    assert_eq!(code, Some(1));
+    assert!(stderr.contains("could not read"), "{stderr}");
+}
