@@ -333,3 +333,32 @@ fn the_exit_codes_tell_the_causes_apart_only_when_asked_and_a_scenario_can_come_
         String::from_utf8_lossy(&output.stdout)
     );
 }
+
+#[test]
+fn output_decimals_rounds_the_coordinates_and_a_bad_value_is_refused() {
+    let rounded = temp(
+        "decimals.json",
+        r#"{"start":{"x":0,"y":0,"z":0},"goal":{"x":2.123456789,"y":0,"z":0},
+  "workspace":{"min":{"x":-5,"y":-5,"z":-5},"max":{"x":5,"y":5,"z":5}},"seed":7,"output_decimals":3}"#,
+    );
+    let (code, stdout, _) = run(&[&rounded]);
+    assert_eq!(code, Some(0), "{stdout}");
+    let parsed: serde_json::Value = serde_json::from_str(&stdout).unwrap();
+    for point in parsed["path"].as_array().unwrap() {
+        for axis in ["x", "y", "z"] {
+            let v = point[axis].as_f64().unwrap();
+            assert!(((v * 1000.0).round() - v * 1000.0).abs() < 1e-6, "{v}");
+        }
+    }
+    let last = parsed["path"].as_array().unwrap().last().unwrap();
+    assert_eq!(last["x"].as_f64().unwrap(), 2.123);
+
+    let bad = temp(
+        "decimals_bad.json",
+        r#"{"start":{"x":0,"y":0,"z":0},"goal":{"x":2,"y":0,"z":0},
+  "workspace":{"min":{"x":-5,"y":-5,"z":-5},"max":{"x":5,"y":5,"z":5}},"output_decimals":40}"#,
+    );
+    let (code, stdout, _) = run(&[&bad]);
+    assert_eq!(code, Some(1), "{stdout}");
+    assert!(stdout.contains("output_decimals"), "{stdout}");
+}
