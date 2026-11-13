@@ -57,6 +57,27 @@ struct Scenario {
     seed: Option<u64>,
     #[serde(default)]
     frame: Option<String>,
+    /// Decimals of the coordinates in the result (0 to 12). Absent: the coordinates are written as computed. The unit of every coordinate is the metre.
+    #[serde(default)]
+    output_decimals: Option<u8>,
+}
+
+/// The highest number of decimals `output_decimals` accepts.
+const MAX_OUTPUT_DECIMALS: u8 = 12;
+
+fn round_path(path: Vec<Vec3>, decimals: Option<u8>) -> Vec<Vec3> {
+    let Some(decimals) = decimals else {
+        return path;
+    };
+    let scale = 10f64.powi(i32::from(decimals));
+    let round = |v: f64| (v * scale).round() / scale;
+    path.into_iter()
+        .map(|p| Vec3 {
+            x: round(p.x),
+            y: round(p.y),
+            z: round(p.z),
+        })
+        .collect()
 }
 
 impl Scenario {
@@ -412,6 +433,21 @@ fn main() -> ExitCode {
             return failure_code("invalid_input", distinct_codes);
         }
     };
+    if scenario
+        .output_decimals
+        .is_some_and(|d| d > MAX_OUTPUT_DECIMALS)
+    {
+        let outcome = PlanOutcome::Error {
+            reason: format!(
+                "invalid_input: output_decimals must be between 0 and {MAX_OUTPUT_DECIMALS}"
+            ),
+        };
+        if let Ok(json) = serde_json::to_string_pretty(&outcome) {
+            println!("{json}");
+        }
+        return failure_code("invalid_input", distinct_codes);
+    }
+    let output_decimals = scenario.output_decimals;
     let config = scenario.config.unwrap_or_default();
     let seed = scenario.seed.unwrap_or(1);
 
@@ -423,7 +459,10 @@ fn main() -> ExitCode {
         config,
         seed,
     ) {
-        Ok(path) => PlanOutcome::Ok { path, frame },
+        Ok(path) => PlanOutcome::Ok {
+            path: round_path(path, output_decimals),
+            frame,
+        },
         Err(e) => PlanOutcome::Error {
             reason: plan_error_reason(e),
         },
