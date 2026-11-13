@@ -176,11 +176,11 @@ mod tests {
     }
 
     #[test]
-    fn a_robot_whose_start_is_on_the_path_of_the_first_gets_no_plan_and_the_others_go_on() {
+    fn a_robot_that_starts_where_the_first_starts_gets_no_plan_and_the_others_go_on() {
         let fleet = Fleet {
             robots: vec![
                 robot("a", Vec3::new(-3.0, 0.0, 0.0), Vec3::new(3.0, 0.0, 0.0), 1),
-                robot("b", Vec3::new(0.0, 0.0, 0.0), Vec3::new(0.0, 3.0, 0.0), 2),
+                robot("b", Vec3::new(-3.0, 0.0, 0.0), Vec3::new(0.0, 3.0, 0.0), 2),
                 robot("c", Vec3::new(-3.0, 4.0, 0.0), Vec3::new(3.0, 4.0, 0.0), 3),
             ],
             obstacles: Vec::new(),

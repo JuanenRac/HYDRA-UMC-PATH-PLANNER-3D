@@ -519,7 +519,7 @@ fn the_fleet_command_plans_the_robots_in_order_and_reports_each() {
         r#"{"workspace":{"min":{"x":-5,"y":-5,"z":-5},"max":{"x":5,"y":5,"z":5}},
   "robots":[
     {"id":"a","start":{"x":-3,"y":0,"z":0},"goal":{"x":3,"y":0,"z":0},"seed":1},
-    {"id":"b","start":{"x":0,"y":0,"z":0},"goal":{"x":0,"y":3,"z":0},"seed":2}]}"#,
+    {"id":"b","start":{"x":-3,"y":0,"z":0},"goal":{"x":0,"y":3,"z":0},"seed":2}]}"#,
     );
     let (code, stdout, _) = run(&[Path::new("fleet"), &blocked]);
     assert_eq!(code, Some(1), "{stdout}");
