@@ -346,6 +346,80 @@ fn run_fleet(fleet_path: &str) -> ExitCode {
     }
 }
 
+/// The plan for a scenario given as text, for `POST /plan`: the HTTP status and the JSON body. The search is capped at `max_duration_ms`
+/// whatever the scenario asks for; a scenario cannot name a zones file (a request must not make the service read a path of its own).
+fn plan_scenario_text(text: &str, max_duration_ms: u64) -> (u16, String) {
+    let fail = |status: u16, reason: String| -> (u16, String) {
+        let outcome = PlanOutcome::Error { reason };
+        (
+            status,
+            serde_json::to_string(&outcome).unwrap_or_else(|_| "{}".to_string()),
+        )
+    };
+    let scenario: Scenario = match serde_json::from_str(text) {
+        Ok(s) => s,
+        Err(e) => {
+            return fail(
+                400,
+                format!("invalid_input: could not parse the scenario: {e}"),
+            )
+        }
+    };
+    if scenario.zones_file.is_some() {
+        return fail(
+            400,
+            "invalid_input: zones_file is not accepted in a request; send the boxes".to_string(),
+        );
+    }
+    let frame = match checked_frame(scenario.frame.as_deref()) {
+        Ok(frame) => frame,
+        Err(reason) => return fail(400, format!("invalid_input: {reason}")),
+    };
+    if scenario
+        .output_decimals
+        .is_some_and(|d| d > MAX_OUTPUT_DECIMALS)
+    {
+        return fail(
+            400,
+            format!("invalid_input: output_decimals must be between 0 and {MAX_OUTPUT_DECIMALS}"),
+        );
+    }
+    let mut config = scenario.config.unwrap_or_default();
+    config.max_duration_ms = Some(
+        config
+            .max_duration_ms
+            .map_or(max_duration_ms, |asked| asked.min(max_duration_ms)),
+    );
+    match plan_with_boxes(
+        scenario.start,
+        scenario.goal,
+        &scenario.obstacles,
+        &scenario.boxes,
+        scenario.workspace,
+        config,
+        scenario.seed.unwrap_or(1),
+    ) {
+        Ok(path) => {
+            let outcome = PlanOutcome::Ok {
+                path: round_path(path, scenario.output_decimals),
+                frame,
+            };
+            (
+                200,
+                serde_json::to_string(&outcome).unwrap_or_else(|_| "{}".to_string()),
+            )
+        }
+        Err(e) => {
+            let status = match &e {
+                PlanError::TimeLimitExceeded => 504,
+                PlanError::InvalidInput(_) => 400,
+                _ => 422,
+            };
+            fail(status, plan_error_reason(e))
+        }
+    }
+}
+
 fn run_shrink(scenario_path: &str, out_path: Option<&str>) -> ExitCode {
     let raw = match fs::read_to_string(scenario_path) {
         Ok(raw) => raw,
