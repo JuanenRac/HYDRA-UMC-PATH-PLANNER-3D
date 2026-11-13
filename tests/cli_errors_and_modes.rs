@@ -265,7 +265,10 @@ fn validate_accepts_a_path_file_with_a_frame_and_refuses_another_frame() {
     let (code, stdout, stderr) = run(&[Path::new("validate"), &scenario, &other]);
     assert_eq!(code, Some(1), "{stdout}");
     assert!(stdout.contains("PathFrameDoesNotMatch"), "{stdout}");
-    assert!(stderr.contains("world") && stderr.contains("base"), "{stderr}");
+    assert!(
+        stderr.contains("world") && stderr.contains("base"),
+        "{stderr}"
+    );
 
     // an object without a frame is read like the bare array
     let unframed = temp(
