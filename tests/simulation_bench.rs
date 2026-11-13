@@ -17,7 +17,10 @@ static COUNTER: AtomicUsize = AtomicUsize::new(0);
 fn temp(content: &str) -> PathBuf {
     let dir = std::env::temp_dir().join(format!("path-planner-bench-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
-    let path = dir.join(format!("file-{}.json", COUNTER.fetch_add(1, Ordering::SeqCst)));
+    let path = dir.join(format!(
+        "file-{}.json",
+        COUNTER.fetch_add(1, Ordering::SeqCst)
+    ));
     std::fs::write(&path, content).unwrap();
     path
 }
@@ -172,7 +175,10 @@ fn random_worlds_are_solved_and_every_path_passes_the_independent_validator() {
         if code == Some(0) {
             solved += 1;
             let path = path_of(&stdout);
-            assert!(near(path[0], world.start), "world {index}: begins at the start");
+            assert!(
+                near(path[0], world.start),
+                "world {index}: begins at the start"
+            );
             assert!(
                 near(path[path.len() - 1], world.goal),
                 "world {index}: ends at the goal"
@@ -262,7 +268,10 @@ fn a_waypoint_pushed_into_an_obstacle_is_caught_by_the_validator() {
         let tampered = temp(&path_json(&path));
         let (vcode, vout) = run(&[Path::new("validate"), &scenario, &tampered]);
         assert_eq!(vcode, Some(1), "world {index}: {vout}");
-        assert!(vout.contains("WaypointInsideObstacle"), "world {index}: {vout}");
+        assert!(
+            vout.contains("WaypointInsideObstacle"),
+            "world {index}: {vout}"
+        );
         caught += 1;
     }
     assert!(caught >= 5, "enough tampered paths were checked: {caught}");
@@ -322,7 +331,9 @@ fn a_straight_line_through_the_walled_in_world_is_refused_by_the_validator() {
     let straight = temp(&path_json(&[[-8.0, -8.0, -8.0], [0.0, 0.0, 0.0]]));
     let (code, stdout) = run(&[Path::new("validate"), &scenario, &straight]);
     assert_eq!(code, Some(1), "{stdout}");
-    assert!(stdout.contains("SegmentIntersectsObstacle") || stdout.contains("WaypointInsideObstacle"));
+    assert!(
+        stdout.contains("SegmentIntersectsObstacle") || stdout.contains("WaypointInsideObstacle")
+    );
 }
 
 #[test]
