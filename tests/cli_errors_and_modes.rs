@@ -438,7 +438,7 @@ fn a_goal_inside_a_box_a_wrong_box_and_the_shrink_of_a_box_scenario_are_refused(
 
 fn scenario_with_zones(zones: &str, name: &str) -> PathBuf {
     let zones_path = temp(&format!("{name}-zones.json"), zones);
-    let zones_path = zones_path.to_string_lossy().replace('\', "/");
+    let zones_path = zones_path.to_string_lossy().replace('\\', "/");
     temp(
         &format!("{name}-scenario.json"),
         &format!(
@@ -478,7 +478,10 @@ fn a_zones_file_that_cannot_be_read_or_holds_a_danger_zone_that_is_not_a_box_is_
     );
     let (code, stdout, _) = run(&[&capsule]);
     assert_eq!(code, Some(1), "{stdout}");
-    assert!(stdout.contains("invalid_input") && stdout.contains("arm"), "{stdout}");
+    assert!(
+        stdout.contains("invalid_input") && stdout.contains("arm"),
+        "{stdout}"
+    );
 
     let missing = temp(
         "zones-missing.json",
