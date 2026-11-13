@@ -241,3 +241,49 @@ fn shrink_usage_errors_and_a_sound_scenario_has_nothing_to_shrink() {
     assert_eq!(written["status"], "no_failure");
     let _ = std::fs::remove_file(out);
 }
+
+#[test]
+fn validate_accepts_a_path_file_with_a_frame_and_refuses_another_frame() {
+    let scenario = temp(
+        "vf_scenario.json",
+        r#"{"frame":"base","start":{"x":0,"y":0,"z":0},"goal":{"x":2,"y":0,"z":0},
+        "workspace":{"min":{"x":-5,"y":-5,"z":-5},"max":{"x":5,"y":5,"z":5}}}"#,
+    );
+    // the same frame, as the planner prints it (with a status the validator ignores)
+    let same = temp(
+        "vf_same.json",
+        r#"{"status":"ok","frame":"base","path":[{"x":0,"y":0,"z":0},{"x":2,"y":0,"z":0}]}"#,
+    );
+    let (code, stdout, stderr) = run(&[Path::new("validate"), &scenario, &same]);
+    assert_eq!(code, Some(0), "{stdout} {stderr}");
+
+    // the path is in another frame: the numbers are not trusted
+    let other = temp(
+        "vf_other.json",
+        r#"{"frame":"world","path":[{"x":0,"y":0,"z":0},{"x":2,"y":0,"z":0}]}"#,
+    );
+    let (code, stdout, stderr) = run(&[Path::new("validate"), &scenario, &other]);
+    assert_eq!(code, Some(1), "{stdout}");
+    assert!(stdout.contains("PathFrameDoesNotMatch"), "{stdout}");
+    assert!(
+        stderr.contains("world") && stderr.contains("base"),
+        "{stderr}"
+    );
+
+    // an object without a frame is read like the bare array
+    let unframed = temp(
+        "vf_unframed.json",
+        r#"{"path":[{"x":0,"y":0,"z":0},{"x":2,"y":0,"z":0}]}"#,
+    );
+    let (code, stdout, _) = run(&[Path::new("validate"), &scenario, &unframed]);
+    assert_eq!(code, Some(0), "{stdout}");
+
+    // a path that names a frame against a scenario that names none
+    let bare_scenario = temp(
+        "vf_bare_scenario.json",
+        r#"{"start":{"x":0,"y":0,"z":0},"goal":{"x":2,"y":0,"z":0},
+        "workspace":{"min":{"x":-5,"y":-5,"z":-5},"max":{"x":5,"y":5,"z":5}}}"#,
+    );
+    let (code, stdout, _) = run(&[Path::new("validate"), &bare_scenario, &same]);
+    assert_eq!(code, Some(1), "{stdout}");
+}
