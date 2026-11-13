@@ -18,6 +18,7 @@
 // optimality, and octree-accelerated collision checks at scale - real,
 // deliberately deferred future work, not forgotten.
 
+mod arm;
 mod fleet;
 mod geometry;
 mod kdtree;
@@ -420,6 +421,41 @@ fn plan_scenario_text(text: &str, max_duration_ms: u64) -> (u16, String) {
     }
 }
 
+/// Plans for an arm in the space of its joint angles (see arm.rs); the path is a list of angle vectors in radians.
+fn run_arm(arm_path: &str) -> ExitCode {
+    let raw = match fs::read_to_string(arm_path) {
+        Ok(raw) => raw,
+        Err(e) => {
+            eprintln!("[path-planner-3d] could not read {arm_path}: {e}");
+            return ExitCode::FAILURE;
+        }
+    };
+    let scenario: arm::ArmScenario = match serde_json::from_str(&raw) {
+        Ok(s) => s,
+        Err(e) => {
+            eprintln!("[path-planner-3d] could not parse {arm_path}: {e}");
+            return ExitCode::FAILURE;
+        }
+    };
+    let result = arm::plan_arm(&scenario);
+    let outcome = match &result {
+        Ok(path) => serde_json::json!({"status": "ok", "path": path}),
+        Err(e) => serde_json::json!({"status": "error", "reason": e.reason()}),
+    };
+    match serde_json::to_string_pretty(&outcome) {
+        Ok(json) => println!("{json}"),
+        Err(e) => {
+            eprintln!("[path-planner-3d] could not serialize result: {e}");
+            return ExitCode::FAILURE;
+        }
+    }
+    if result.is_ok() {
+        ExitCode::SUCCESS
+    } else {
+        ExitCode::FAILURE
+    }
+}
+
 fn run_shrink(scenario_path: &str, out_path: Option<&str>) -> ExitCode {
     let raw = match fs::read_to_string(scenario_path) {
         Ok(raw) => raw,
@@ -545,6 +581,15 @@ fn main() -> ExitCode {
             None
         };
         return run_shrink(scenario_path, out_path);
+    }
+
+    if args.get(1).map(String::as_str) == Some("arm") {
+        let Some(arm_path) = args.get(2) else {
+            eprintln!("Usage: hydra-umc-path-planner-3d arm <arm-scenario.json>");
+            eprintln!("<arm-scenario.json> has the chain of joints, the start and goal angles in radians and the obstacles.");
+            return ExitCode::FAILURE;
+        };
+        return run_arm(arm_path);
     }
 
     let Some(scenario_path) = args.get(1) else {
