@@ -18,6 +18,7 @@
 // optimality, and octree-accelerated collision checks at scale - real,
 // deliberately deferred future work, not forgotten.
 
+mod fleet;
 mod geometry;
 mod kdtree;
 mod obstacle;
@@ -302,6 +303,49 @@ enum ShrinkOutcome {
 /// reports it - to stdout, or to `out_path` when given, always in the
 /// same JSON shape the plain CLI invocation itself accepts, so the
 /// minimized case is directly replayable.
+/// Plans several robots in the order of their priority (see fleet.rs): the earlier robots' paths are kept clear by the later ones.
+fn run_fleet(fleet_path: &str) -> ExitCode {
+    let raw = match fs::read_to_string(fleet_path) {
+        Ok(raw) => raw,
+        Err(e) => {
+            eprintln!("[path-planner-3d] could not read {fleet_path}: {e}");
+            return ExitCode::FAILURE;
+        }
+    };
+    let fleet: fleet::Fleet = match serde_json::from_str(&raw) {
+        Ok(f) => f,
+        Err(e) => {
+            eprintln!("[path-planner-3d] could not parse {fleet_path}: {e}");
+            return ExitCode::FAILURE;
+        }
+    };
+    let results = fleet::plan_fleet(&fleet);
+    let all_ok = results.iter().all(|(_, r)| r.is_ok());
+    let robots: Vec<serde_json::Value> = results
+        .into_iter()
+        .map(|(id, result)| match result {
+            Ok(path) => serde_json::json!({"id": id, "status": "ok", "path": path}),
+            Err(e) => {
+                serde_json::json!({"id": id, "status": "error", "reason": plan_error_reason(e)})
+            }
+        })
+        .collect();
+    let outcome =
+        serde_json::json!({"status": if all_ok { "ok" } else { "partial" }, "robots": robots});
+    match serde_json::to_string_pretty(&outcome) {
+        Ok(json) => println!("{json}"),
+        Err(e) => {
+            eprintln!("[path-planner-3d] could not serialize result: {e}");
+            return ExitCode::FAILURE;
+        }
+    }
+    if all_ok {
+        ExitCode::SUCCESS
+    } else {
+        ExitCode::FAILURE
+    }
+}
+
 fn run_shrink(scenario_path: &str, out_path: Option<&str>) -> ExitCode {
     let raw = match fs::read_to_string(scenario_path) {
         Ok(raw) => raw,
@@ -397,6 +441,15 @@ fn main() -> ExitCode {
             return ExitCode::FAILURE;
         };
         return run_validate(scenario_path, path_path);
+    }
+
+    if args.get(1).map(String::as_str) == Some("fleet") {
+        let Some(fleet_path) = args.get(2) else {
+            eprintln!("Usage: hydra-umc-path-planner-3d fleet <fleet.json>");
+            eprintln!("<fleet.json> has the workspace, the fixed obstacles and the robots in the order of their priority.");
+            return ExitCode::FAILURE;
+        };
+        return run_fleet(fleet_path);
     }
 
     if args.get(1).map(String::as_str) == Some("shrink") {
