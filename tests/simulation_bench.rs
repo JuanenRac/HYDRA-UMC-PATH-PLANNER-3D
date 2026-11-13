@@ -351,9 +351,9 @@ fn the_planner_never_fails_its_own_validator_on_random_worlds() {
 #[test]
 fn a_wall_with_one_gap_is_crossed_only_through_the_gap() {
     let mut obstacles = Vec::new();
-    let mut y = -9.0;
+    let mut y = -9.0_f64;
     while y <= 9.0 {
-        let mut z = -9.0;
+        let mut z = -9.0_f64;
         while z <= 9.0 {
             if (y * y + z * z).sqrt() > 2.5 {
                 obstacles.push(([0.0, y, z], 1.0));
