@@ -578,3 +578,27 @@ fn the_arm_command_plans_in_joint_space_and_reports_why_it_cannot() {
     assert_eq!(code, Some(1));
     assert!(stderr.contains("could not read"), "{stderr}");
 }
+
+#[test]
+fn the_arm_command_refuses_a_file_that_is_not_an_arm_scenario_and_reports_a_blocked_goal() {
+    let bad = temp("arm-bad.json", "{not json");
+    let (code, _, stderr) = run(&[Path::new("arm"), &bad]);
+    assert_eq!(code, Some(1));
+    assert!(stderr.contains("could not parse"), "{stderr}");
+
+    let (code, _, stderr) = run(&[Path::new("arm")]);
+    assert_eq!(code, Some(1));
+    assert!(stderr.contains("Usage"), "{stderr}");
+
+    let blocked = temp(
+        "arm-blocked.json",
+        r#"{"arm":{"joints":[{"origin":{"x":0,"y":0,"z":0},"axis":{"x":0,"y":0,"z":1},"lower":-1.0,"upper":1.0}],
+  "tip":{"x":1,"y":0,"z":0},"link_radius":0.05},
+  "start":[-1.0],"goal":[1.0],
+  "obstacles":[{"center":{"x":1,"y":0,"z":0},"radius":0.2}],
+  "config":{"max_iterations":300}}"#,
+    );
+    let (code, stdout, _) = run(&[Path::new("arm"), &blocked]);
+    assert_eq!(code, Some(1), "{stdout}");
+    assert!(stdout.contains("no_path_found"), "{stdout}");
+}

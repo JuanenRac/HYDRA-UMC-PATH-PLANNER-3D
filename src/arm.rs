@@ -534,4 +534,93 @@ mod tests {
         // the goal arm points along +y and crosses the wall, so the goal itself is in collision
         assert_eq!(plan_arm(&s), Err(ArmError::GoalInCollision));
     }
+    #[test]
+    fn every_kind_of_wrong_scenario_is_refused_by_name() {
+        let base = || scenario([0.0, 0.0], [1.0, 0.0], Vec::new());
+        let refused = |change: &dyn Fn(&mut ArmScenario), word: &str| {
+            let mut s = base();
+            change(&mut s);
+            match plan_arm(&s) {
+                Err(ArmError::Invalid(text)) => assert!(text.contains(word), "{text}"),
+                other => panic!("expected a refusal naming {word}, got {other:?}"),
+            }
+        };
+        refused(&|s| s.arm.joints.clear(), "no joints");
+        refused(&|s| s.arm.link_radius = -1.0, "link_radius");
+        refused(&|s| s.arm.link_radius = f64::NAN, "link_radius");
+        refused(&|s| s.arm.tip = Vec3::new(f64::INFINITY, 0.0, 0.0), "tip");
+        refused(
+            &|s| s.arm.base = Some(Vec3::new(f64::NAN, 0.0, 0.0)),
+            "base",
+        );
+        refused(
+            &|s| s.arm.joints[1].origin = Vec3::new(f64::NAN, 0.0, 0.0),
+            "origin",
+        );
+        refused(
+            &|s| s.arm.joints[1].rpy = Some(Vec3::new(f64::NAN, 0.0, 0.0)),
+            "rpy",
+        );
+        refused(&|s| s.arm.joints[0].lower = 5.0, "limits");
+        refused(&|s| s.arm.joints[0].upper = f64::NAN, "limits");
+        refused(&|s| s.start = vec![0.0, f64::NAN], "outside the limits");
+        refused(&|s| s.config.resolution_rad = -1.0, "resolution_rad");
+        refused(&|s| s.config.goal_threshold_rad = 0.0, "goal_threshold_rad");
+        refused(&|s| s.config.goal_bias = 1.5, "goal_bias");
+        refused(&|s| s.config.max_iterations = 0, "max_iterations");
+        refused(
+            &|s| s.config.max_iterations = MAX_ITERATIONS_LIMIT + 1,
+            "max_iterations",
+        );
+        refused(
+            &|s| s.obstacles = vec![Obstacle::new(Vec3::new(f64::NAN, 0.0, 0.0), 0.1)],
+            "NonFiniteObstacle",
+        );
+        refused(
+            &|s| {
+                s.boxes = vec![BoxObstacle {
+                    min: Vec3::new(1.0, 0.0, 0.0),
+                    max: Vec3::new(0.0, 1.0, 1.0),
+                }]
+            },
+            "InvertedBox",
+        );
+        assert_eq!(ArmError::StartInCollision.reason(), "start_in_collision");
+        assert_eq!(ArmError::GoalInCollision.reason(), "goal_in_collision");
+        assert_eq!(ArmError::NoPathFound.reason(), "no_path_found");
+        assert!(ArmError::Invalid("x".into())
+            .reason()
+            .starts_with("invalid_input"));
+    }
+
+    #[test]
+    fn a_goal_behind_a_blocked_range_of_one_joint_ends_without_a_path() {
+        // one joint turning the tip about the z axis; a sphere on the tip at angle zero separates the two ends of its range
+        let arm = Arm {
+            base: None,
+            joints: vec![ArmJoint {
+                name: String::new(),
+                origin: Vec3::new(0.0, 0.0, 0.0),
+                rpy: Some(Vec3::new(0.0, 0.0, 0.0)),
+                axis: Vec3::new(0.0, 0.0, 1.0),
+                lower: -1.0,
+                upper: 1.0,
+            }],
+            tip: Vec3::new(1.0, 0.0, 0.0),
+            link_radius: 0.05,
+        };
+        let s = ArmScenario {
+            arm,
+            start: vec![-1.0],
+            goal: vec![1.0],
+            obstacles: vec![Obstacle::new(Vec3::new(1.0, 0.0, 0.0), 0.2)],
+            boxes: Vec::new(),
+            config: ArmConfig {
+                max_iterations: 300,
+                ..ArmConfig::default()
+            },
+            seed: None,
+        };
+        assert_eq!(plan_arm(&s), Err(ArmError::NoPathFound));
+    }
 }
