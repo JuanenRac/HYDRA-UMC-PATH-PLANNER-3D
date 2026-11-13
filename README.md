@@ -41,7 +41,7 @@ GPL-3.0-or-later - see LICENSE
 | Maturity | Functional |
 | Tests | 99 (`cargo test`) |
 | Stack | Rust / RRT* path planning |
-| On real hardware | Not yet: no run on real hardware is recorded for this version |
+| On real hardware | Simulated only: tested against emulators, fakes or simulators; no run on real hardware is recorded for this version |
 
 **Jump to:** [Overview](#-overview) · [Architecture](#-architecture) · [Quick start](#-quick-start) · [Testing](#-testing) · [Repository Structure](#-repository-structure) · [Related Projects](#-related-projects)
 
@@ -55,7 +55,7 @@ Each line is one part of this repository and the light says how far it is today.
 |---|---|---|
 | Software | 🟡 | Works for its main purpose; the honesty check above lists what is still missing |
 | Tests | 🟢 | 99 automated tests, run on every change |
-| Real hardware | 🔴 | Not yet: no run on real hardware is recorded for this version |
+| Real hardware | 🟠 | Simulated only: tested against emulators, fakes or simulators; no run on real hardware is recorded for this version |
 | Integration | 🟠 | Its messages and routes are checked against the shared contracts of the SDK; it has not run together with the real equipment |
 | Deployment | 🟠 | Published as a release; installing it on a clean machine is documented but not recorded |
 | Planning | 🟠 | The planner works on simulated scenes and scripted goals; it has never planned for a real robot |
