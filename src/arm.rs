@@ -71,7 +71,9 @@ fn from_rpy(rpy: Vec3) -> Matrix {
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct ArmJoint {
+    /// only a label for the person who writes the scenario
     #[serde(default)]
+    #[allow(dead_code)]
     pub name: String,
     /// where the joint is, in the frame of the joint before it (the base for the first one), in metres
     pub origin: Vec3,
@@ -521,15 +523,14 @@ mod tests {
     }
 
     #[test]
-    fn a_goal_that_cannot_be_reached_ends_without_a_path() {
-        // a wall across the whole reach between the start and the goal
+    fn a_goal_inside_a_box_is_refused_before_the_search() {
+        // a wall that the goal arm crosses
         let mut s = scenario([0.0, 0.0], [std::f64::consts::FRAC_PI_2, 0.0], Vec::new());
         s.boxes = vec![BoxObstacle {
             min: Vec3::new(-5.0, 0.5, -5.0),
             max: Vec3::new(5.0, 0.7, 5.0),
         }];
         s.goal = vec![std::f64::consts::FRAC_PI_2, 0.0];
-        s.config.max_iterations = 300;
         // the goal arm points along +y and crosses the wall, so the goal itself is in collision
         assert_eq!(plan_arm(&s), Err(ArmError::GoalInCollision));
     }
