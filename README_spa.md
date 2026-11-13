@@ -18,14 +18,14 @@ GPL-3.0-or-later - see LICENSE
   <img src="https://img.shields.io/badge/License-GPL%203.0--or--later-blue.svg" alt="GPL 3.0 or later">
   <img src="https://img.shields.io/badge/Algorithm-RRT-orange.svg" alt="Algorithm">
   <img src="https://img.shields.io/badge/Engine-Rust-blue.svg" alt="Engine">
-  <img src="https://img.shields.io/badge/Tests-99%20passing-2ea44f.svg" alt="Tests">
+  <img src="https://img.shields.io/badge/Tests-151%20passing-2ea44f.svg" alt="Tests">
   <img src="https://img.shields.io/badge/Version-0.1.4-0f6cbd.svg" alt="Version">
   <img src="https://img.shields.io/badge/Maturity-functional-0F6CBD.svg" alt="Maturity">
 </p>
 
 ---
 
-**Verificación de honestidad - qué funciona de verdad hoy:** la búsqueda RRT de un solo agente en `src/rrt.rs` (con su límite real por reloj de pared `max_duration_ms`, independiente de `max_iterations`), la matemática de colisión esfera/segmento de `src/obstacle.rs`, la matemática vectorial de `src/geometry.rs`, el PRNG determinista de `src/rng.rs`, la puerta de validación de escenarios de `src/semantics.rs`, y la re-verificación de seguridad de una trayectoria ya calculada en `src/validate.rs` son reales y están probados (99 tests, `cargo test`) - cada trayectoria devuelta se verifica libre de obstáculos en los tests, no solo "parece" correcta. La CLI (`run.sh scenarios/example.json`, más el subcomando `validate`) es realmente utilizable hoy. Lo que sigue siendo aspiracional: esto es un RRT de un solo hilo (más un modo RRT* con paso de reconexión, apagado por defecto, `optimize_iterations`) y no un coordinador multi-robot - el lenguaje de "hasta 32+ robots simultáneamente" y "generación de rutas en menos de 50ms" en el resto de este README describe un objetivo futuro, no un resultado medido; no hay nada de C++ en todo este repositorio (Cargo.toml tiene exactamente dos dependencias, `serde`/`serde_json`, sin ningún crate de paralelismo/hilos), y es una CLI sobre un archivo de escenario JSON, todavía no un servicio de red conectado a HYDRA-UMC-JOB-DISPATCHER ni validado contra un HYDRA-UMC-TWIN en vivo. Ver `CHANGELOG.md` para lo que ya se ha entregado exactamente, y `mejoras_futuras.txt` para la lista completa y honesta de lo que se ha diferido deliberadamente y por qué.
+**Verificación de honestidad - qué funciona de verdad hoy:** la búsqueda RRT de un solo agente en `src/rrt.rs` (con su límite real por reloj de pared `max_duration_ms`, independiente de `max_iterations`), la matemática de colisión esfera/segmento de `src/obstacle.rs`, la matemática vectorial de `src/geometry.rs`, el PRNG determinista de `src/rng.rs`, la puerta de validación de escenarios de `src/semantics.rs`, y la re-verificación de seguridad de una trayectoria ya calculada en `src/validate.rs` son reales y están probados (151 tests, `cargo test`) - cada trayectoria devuelta se verifica libre de obstáculos en los tests, no solo "parece" correcta. La CLI (`run.sh scenarios/example.json`, más el subcomando `validate`) es realmente utilizable hoy. Lo que sigue siendo aspiracional: esto es un RRT de un solo hilo (más un modo RRT* con paso de reconexión, apagado por defecto, `optimize_iterations`) y no un coordinador multi-robot - el lenguaje de "hasta 32+ robots simultáneamente" y "generación de rutas en menos de 50ms" en el resto de este README describe un objetivo futuro, no un resultado medido; no hay nada de C++ en todo este repositorio (Cargo.toml tiene exactamente dos dependencias, `serde`/`serde_json`, sin ningún crate de paralelismo/hilos), y es una CLI sobre un archivo de escenario JSON, todavía no un servicio de red conectado a HYDRA-UMC-JOB-DISPATCHER ni validado contra un HYDRA-UMC-TWIN en vivo. Ver `CHANGELOG.md` para lo que ya se ha entregado exactamente, y `mejoras_futuras.txt` para la lista completa y honesta de lo que se ha diferido deliberadamente y por qué.
 
 ---
 
@@ -39,7 +39,7 @@ GPL-3.0-or-later - see LICENSE
 |---|---|
 | Versión | `0.1.4` |
 | Madurez | Funcional |
-| Tests | 99 (`cargo test`) |
+| Tests | 151 (`cargo test`) |
 | Tecnología | Rust / RRT* path planning |
 | En hardware real | Solo simulado: probado con emuladores, dobles de prueba o simuladores; no consta ninguna ejecución en hardware real para esta versión |
 
@@ -54,7 +54,7 @@ Cada línea es una parte de este repositorio y la luz dice hasta dónde llega ho
 | Área | Estado | Qué significa aquí |
 |---|---|---|
 | Software | 🟡 | Funciona para su propósito principal; la comprobación de honestidad de arriba lista lo que aún falta |
-| Pruebas | 🟢 | 99 pruebas automáticas, ejecutadas en cada cambio |
+| Pruebas | 🟢 | 151 pruebas automáticas, ejecutadas en cada cambio |
 | Hardware real | 🟠 | Solo simulado: probado con emuladores, dobles de prueba o simuladores; no consta ninguna ejecución en hardware real para esta versión |
 | Integración | 🟠 | Sus mensajes y rutas se comprueban contra los contratos compartidos del SDK; no ha funcionado junto con el equipo real |
 | Despliegue | 🟠 | Publicado como release; instalarlo en un equipo limpio está documentado pero no consta |
@@ -128,7 +128,7 @@ cargo test
 
 ## 🧪 Pruebas
 
-99 pruebas automáticas se ejecutan con `cargo test`. No necesitan hardware ni nada fuera de esta máquina.
+151 pruebas automáticas se ejecutan con `cargo test`. No necesitan hardware ni nada fuera de esta máquina.
 
 El CI ejecuta `HYDRA_UMC_CI=1 python tools/ci_validate.py`, que comprueba el manifiesto, los documentos, los ocho README y las imágenes.
 
@@ -183,7 +183,7 @@ de un escenario, sin correr una búsqueda nueva:
 cargo test   # geometria + colision de obstaculos, el PRNG, el
              # planificador RRT (incluyendo su limite real de tiempo por
              # reloj) y la revalidacion de seguridad de validate.rs -
-             # 99 tests en total
+             # 151 tests en total
 ```
 
 ## 📂 Estructura del repositorio

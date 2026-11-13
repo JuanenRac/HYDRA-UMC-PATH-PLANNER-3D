@@ -18,14 +18,14 @@ GPL-3.0-or-later - see LICENSE
   <img src="https://img.shields.io/badge/License-GPL%203.0--or--later-blue.svg" alt="GPL 3.0 or later">
   <img src="https://img.shields.io/badge/Algorithm-RRT-orange.svg" alt="Algorithm">
   <img src="https://img.shields.io/badge/Engine-Rust-blue.svg" alt="Engine">
-  <img src="https://img.shields.io/badge/Tests-99%20passing-2ea44f.svg" alt="Tests">
+  <img src="https://img.shields.io/badge/Tests-151%20passing-2ea44f.svg" alt="Tests">
   <img src="https://img.shields.io/badge/Version-0.1.4-0f6cbd.svg" alt="Version">
   <img src="https://img.shields.io/badge/Maturity-functional-0F6CBD.svg" alt="Maturity">
 </p>
 
 ---
 
-**Honesty check - what actually runs today:** `src/rrt.rs`'s single-agent RRT search (with its real wall-clock `max_duration_ms` deadline, independent of `max_iterations`), `src/obstacle.rs`'s sphere/segment collision math, `src/geometry.rs`'s vector math, `src/rng.rs`'s deterministic PRNG, `src/semantics.rs`'s scenario validation gate, `src/validate.rs`'s safety re-check of an already-computed path, and `src/shrink.rs`'s real case-minimization for a failing scenario (deletes obstacles then tightens the workspace/iteration budget, re-checking the exact same failure predicate after every tentative reduction, never a scenario that merely looks smaller while testing something else) are real and tested (99 tests, `cargo test`) - every returned path is verified obstacle-clear in tests, not just plausible-looking. The CLI (`run.sh scenarios/example.json`, plus the `validate` and `shrink` subcommands) is genuinely usable today. What is still aspirational: this is a single-threaded RRT (plus an RRT* mode with a rewiring pass, off by default, `optimize_iterations`) and not a multi-robot coordinator - the "up to 32+ robots simultaneously" and "sub-50ms path generation" language elsewhere in this README describe a future target, not a measured result; there is no C++ anywhere in this repository (Cargo.toml has exactly two dependencies, `serde`/`serde_json`, no threading/parallelism crate), and it is a CLI over a JSON scenario file, not yet a network service wired to HYDRA-UMC-JOB-DISPATCHER or validated against a live HYDRA-UMC-TWIN. See `CHANGELOG.md` for exactly what has shipped so far, and `mejoras_futuras.txt` for the complete, honest list of what's deliberately deferred and why.
+**Honesty check - what actually runs today:** `src/rrt.rs`'s single-agent RRT search (with its real wall-clock `max_duration_ms` deadline, independent of `max_iterations`), `src/obstacle.rs`'s sphere/segment collision math, `src/geometry.rs`'s vector math, `src/rng.rs`'s deterministic PRNG, `src/semantics.rs`'s scenario validation gate, `src/validate.rs`'s safety re-check of an already-computed path, and `src/shrink.rs`'s real case-minimization for a failing scenario (deletes obstacles then tightens the workspace/iteration budget, re-checking the exact same failure predicate after every tentative reduction, never a scenario that merely looks smaller while testing something else) are real and tested (151 tests, `cargo test`) - every returned path is verified obstacle-clear in tests, not just plausible-looking. The CLI (`run.sh scenarios/example.json`, plus the `validate` and `shrink` subcommands) is genuinely usable today. What is still aspirational: this is a single-threaded RRT (plus an RRT* mode with a rewiring pass, off by default, `optimize_iterations`) and not a multi-robot coordinator - the "up to 32+ robots simultaneously" and "sub-50ms path generation" language elsewhere in this README describe a future target, not a measured result; there is no C++ anywhere in this repository (Cargo.toml has exactly two dependencies, `serde`/`serde_json`, no threading/parallelism crate), and it is a CLI over a JSON scenario file, not yet a network service wired to HYDRA-UMC-JOB-DISPATCHER or validated against a live HYDRA-UMC-TWIN. See `CHANGELOG.md` for exactly what has shipped so far, and `mejoras_futuras.txt` for the complete, honest list of what's deliberately deferred and why.
 
 ---
 
@@ -39,7 +39,7 @@ GPL-3.0-or-later - see LICENSE
 |---|---|
 | Version | `0.1.4` |
 | Maturity | Functional |
-| Tests | 99 (`cargo test`) |
+| Tests | 151 (`cargo test`) |
 | Stack | Rust / RRT* path planning |
 | On real hardware | Simulated only: tested against emulators, fakes or simulators; no run on real hardware is recorded for this version |
 
@@ -54,7 +54,7 @@ Each line is one part of this repository and the light says how far it is today.
 | Area | State | What it means here |
 |---|---|---|
 | Software | 🟡 | Works for its main purpose; the honesty check above lists what is still missing |
-| Tests | 🟢 | 99 automated tests, run on every change |
+| Tests | 🟢 | 151 automated tests, run on every change |
 | Real hardware | 🟠 | Simulated only: tested against emulators, fakes or simulators; no run on real hardware is recorded for this version |
 | Integration | 🟠 | Its messages and routes are checked against the shared contracts of the SDK; it has not run together with the real equipment |
 | Deployment | 🟠 | Published as a release; installing it on a clean machine is documented but not recorded |
@@ -128,7 +128,7 @@ cargo test
 
 ## 🧪 Testing
 
-99 automated tests run with `cargo test`. They need no hardware and nothing outside this machine.
+151 automated tests run with `cargo test`. They need no hardware and nothing outside this machine.
 
 The CI runs `HYDRA_UMC_CI=1 python tools/ci_validate.py`, which checks the manifest, the documents, the eight READMEs and the pictures.
 
@@ -181,7 +181,7 @@ obstacles/workspace, without running a new search:
 cargo test   # geometry + obstacle collision math, the PRNG, the RRT
              # planner (including its real wall-clock time limit),
              # validate.rs's own safety re-check, and shrink.rs's real
-             # failing-scenario minimization - 99 tests total
+             # failing-scenario minimization - 151 tests total
 ```
 
 ## 📂 Repository Structure

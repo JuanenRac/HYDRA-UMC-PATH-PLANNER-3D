@@ -18,14 +18,14 @@ GPL-3.0-or-later - see LICENSE
   <img src="https://img.shields.io/badge/License-GPL%203.0--or--later-blue.svg" alt="GPL 3.0 or later">
   <img src="https://img.shields.io/badge/Algorithm-RRT-orange.svg" alt="Algorithm">
   <img src="https://img.shields.io/badge/Engine-Rust-blue.svg" alt="Engine">
-  <img src="https://img.shields.io/badge/Tests-99%20passing-2ea44f.svg" alt="Tests">
+  <img src="https://img.shields.io/badge/Tests-151%20passing-2ea44f.svg" alt="Tests">
   <img src="https://img.shields.io/badge/Version-0.1.4-0f6cbd.svg" alt="Version">
   <img src="https://img.shields.io/badge/Maturity-functional-0F6CBD.svg" alt="Maturity">
 </p>
 
 ---
 
-**Vérification d'honnêteté - ce qui fonctionne réellement aujourd'hui :** la recherche RRT à agent unique dans `src/rrt.rs` (avec sa véritable échéance `max_duration_ms` basée sur l'horloge réelle, indépendante de `max_iterations`), les calculs de collision sphère/segment de `src/obstacle.rs`, les calculs vectoriels de `src/geometry.rs`, le PRNG déterministe de `src/rng.rs`, la porte de validation de scénario de `src/semantics.rs`, et la revérification de sécurité d'une trajectoire déjà calculée dans `src/validate.rs` sont réels et testés (99 tests, `cargo test`) - chaque trajectoire renvoyée est vérifiée sans collision dans les tests, pas seulement plausible. La CLI (`run.sh scenarios/example.json`, plus la sous-commande `validate`) est réellement utilisable aujourd'hui. Ce qui reste aspirationnel : il s'agit d'un RRT à un seul thread (avec un mode RRT* à passe de reconnexion, désactivé par défaut, `optimize_iterations`) et non d'un coordinateur multi-robot - les mentions « jusqu'à plus de 32 robots simultanément » et « génération de trajectoire en moins de 50 ms » ailleurs dans ce README décrivent un objectif futur, pas un résultat mesuré ; il n'y a aucun C++ nulle part dans ce dépôt (Cargo.toml a exactement deux dépendances, `serde`/`serde_json`, aucun crate de parallélisme/threads), et c'est une CLI sur un fichier de scénario JSON, pas encore un service réseau relié à HYDRA-UMC-JOB-DISPATCHER ni validé contre un HYDRA-UMC-TWIN en direct. Voir `CHANGELOG.md` pour ce qui a déjà été livré exactement, et `mejoras_futuras.txt` pour la liste complète et honnête de ce qui est délibérément reporté et pourquoi.
+**Vérification d'honnêteté - ce qui fonctionne réellement aujourd'hui :** la recherche RRT à agent unique dans `src/rrt.rs` (avec sa véritable échéance `max_duration_ms` basée sur l'horloge réelle, indépendante de `max_iterations`), les calculs de collision sphère/segment de `src/obstacle.rs`, les calculs vectoriels de `src/geometry.rs`, le PRNG déterministe de `src/rng.rs`, la porte de validation de scénario de `src/semantics.rs`, et la revérification de sécurité d'une trajectoire déjà calculée dans `src/validate.rs` sont réels et testés (151 tests, `cargo test`) - chaque trajectoire renvoyée est vérifiée sans collision dans les tests, pas seulement plausible. La CLI (`run.sh scenarios/example.json`, plus la sous-commande `validate`) est réellement utilisable aujourd'hui. Ce qui reste aspirationnel : il s'agit d'un RRT à un seul thread (avec un mode RRT* à passe de reconnexion, désactivé par défaut, `optimize_iterations`) et non d'un coordinateur multi-robot - les mentions « jusqu'à plus de 32 robots simultanément » et « génération de trajectoire en moins de 50 ms » ailleurs dans ce README décrivent un objectif futur, pas un résultat mesuré ; il n'y a aucun C++ nulle part dans ce dépôt (Cargo.toml a exactement deux dépendances, `serde`/`serde_json`, aucun crate de parallélisme/threads), et c'est une CLI sur un fichier de scénario JSON, pas encore un service réseau relié à HYDRA-UMC-JOB-DISPATCHER ni validé contre un HYDRA-UMC-TWIN en direct. Voir `CHANGELOG.md` pour ce qui a déjà été livré exactement, et `mejoras_futuras.txt` pour la liste complète et honnête de ce qui est délibérément reporté et pourquoi.
 
 ---
 
@@ -39,7 +39,7 @@ GPL-3.0-or-later - see LICENSE
 |---|---|
 | Version | `0.1.4` |
 | Maturité | Fonctionnel |
-| Tests | 99 (`cargo test`) |
+| Tests | 151 (`cargo test`) |
 | Technologie | Rust / RRT* path planning |
 | Sur matériel réel | Simulé seulement : testé avec des émulateurs, des doubles de test ou des simulateurs ; aucune exécution sur du matériel réel n'est consignée pour cette version |
 
@@ -54,7 +54,7 @@ Chaque ligne est une partie de ce dépôt et le feu dit où elle en est aujourd'
 | Domaine | État | Ce que cela veut dire ici |
 |---|---|---|
 | Logiciel | 🟡 | Fonctionne pour son usage principal ; la vérification d'honnêteté ci-dessus liste ce qui manque encore |
-| Tests | 🟢 | 99 tests automatiques, exécutés à chaque modification |
+| Tests | 🟢 | 151 tests automatiques, exécutés à chaque modification |
 | Matériel réel | 🟠 | Simulé seulement : testé avec des émulateurs, des doubles de test ou des simulateurs ; aucune exécution sur du matériel réel n'est consignée pour cette version |
 | Intégration | 🟠 | Ses messages et ses routes sont vérifiés par rapport aux contrats partagés du SDK ; il n'a pas fonctionné avec l'équipement réel |
 | Déploiement | 🟠 | Publié comme release ; l'installation sur une machine propre est documentée mais non consignée |
@@ -128,7 +128,7 @@ cargo test
 
 ## 🧪 Tests
 
-99 tests automatiques s'exécutent avec `cargo test`. Ils n'ont besoin ni de matériel ni de rien en dehors de cette machine.
+151 tests automatiques s'exécutent avec `cargo test`. Ils n'ont besoin ni de matériel ni de rien en dehors de cette machine.
 
 La CI exécute `HYDRA_UMC_CI=1 python tools/ci_validate.py`, qui vérifie le manifeste, les documents, les huit README et les images.
 
@@ -184,7 +184,7 @@ recherche :
 cargo test   # geometrie + collision d'obstacles, le PRNG, le
              # planificateur RRT (y compris sa vraie limite de temps par
              # horloge) et la revérification de sécurité de validate.rs -
-             # 99 tests au total
+             # 151 tests au total
 ```
 
 ## 📂 Structure du dépôt
