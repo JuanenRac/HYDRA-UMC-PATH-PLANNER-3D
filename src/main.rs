@@ -40,7 +40,7 @@ use shrink::{planner_output_is_unsafe, shrink_scenario};
 use std::env;
 use std::fs;
 use std::process::ExitCode;
-use validate::{check_endpoints, validate_path, PathSafetyIssue};
+use validate::{check_endpoints, check_frame, validate_path, PathSafetyIssue};
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 
@@ -135,6 +135,20 @@ enum ValidateOutcome {
     Unsafe { issues: Vec<PathSafetyIssue> },
 }
 
+/// A path file: the bare array of waypoints, or an object with a `path` and
+/// the `frame` they are in (the output of the planner is one, so it can be
+/// handed back as it is; its other fields are ignored).
+#[derive(Deserialize)]
+#[serde(untagged)]
+enum PathFile {
+    Bare(Vec<Vec3>),
+    Framed {
+        path: Vec<Vec3>,
+        #[serde(default)]
+        frame: Option<String>,
+    },
+}
+
 /// Validates an ALREADY-COMPUTED path (e.g. cached/replayed, or relayed
 /// from another process) against a scenario's CURRENT obstacles and
 /// workspace, without running a new search - a fail-safe re-check
@@ -163,8 +177,9 @@ fn run_validate(scenario_path: &str, path_path: &str) -> ExitCode {
             return ExitCode::FAILURE;
         }
     };
-    let path: Vec<Vec3> = match serde_json::from_str(&path_raw) {
-        Ok(p) => p,
+    let (path, path_frame): (Vec<Vec3>, Option<String>) = match serde_json::from_str(&path_raw) {
+        Ok(PathFile::Bare(path)) => (path, None),
+        Ok(PathFile::Framed { path, frame }) => (path, frame),
         Err(e) => {
             eprintln!("[path-planner-3d] could not parse {path_path}: {e}");
             return ExitCode::FAILURE;
@@ -186,6 +201,14 @@ fn run_validate(scenario_path: &str, path_path: &str) -> ExitCode {
         robot_radius,
     );
     issues.extend(check_endpoints(&path, scenario.start, scenario.goal));
+    let frame_issues = check_frame(path_frame.as_deref(), frame.as_deref());
+    if !frame_issues.is_empty() {
+        eprintln!(
+            "[path-planner-3d] the path is in frame {:?} but the scenario is in {:?}",
+            path_frame, frame
+        );
+    }
+    issues.extend(frame_issues);
     let is_safe = issues.is_empty();
     let outcome = if is_safe {
         ValidateOutcome::Safe { frame }

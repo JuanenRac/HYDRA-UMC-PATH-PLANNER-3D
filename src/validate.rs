@@ -57,6 +57,10 @@ pub enum PathSafetyIssue {
         goal: Vec3,
         last: Vec3,
     },
+    /// The path file names the frame its waypoints are in and it is not the
+    /// frame of the scenario (or the scenario names none): the numbers cannot
+    /// be trusted to mean the same places.
+    PathFrameDoesNotMatch,
     /// the scenario's own numeric inputs (robot_radius, obstacle
     /// geometry, workspace bounds) are not physically valid - checked
     /// BEFORE any geometry test below runs, so a negative robot_radius
@@ -177,6 +181,17 @@ pub fn check_endpoints(path: &[Vec3], start: Vec3, goal: Vec3) -> Vec<PathSafety
         issues.push(PathSafetyIssue::PathDoesNotReachGoal { goal, last });
     }
     issues
+}
+
+/// Does the frame a path file declares agree with the frame of the scenario?
+/// A path without a declared frame (the bare array of waypoints) is accepted as
+/// before; one that declares a frame must declare the scenario's own.
+pub fn check_frame(path_frame: Option<&str>, scenario_frame: Option<&str>) -> Vec<PathSafetyIssue> {
+    match (path_frame, scenario_frame) {
+        (Some(path), Some(scenario)) if path == scenario => Vec::new(),
+        (Some(_), _) => vec![PathSafetyIssue::PathFrameDoesNotMatch],
+        (None, _) => Vec::new(),
+    }
 }
 
 #[cfg(test)]
@@ -312,5 +327,20 @@ mod tests {
 
         let unsafe_path = vec![Vec3::new(0.0, 0.0, 0.0), Vec3::new(999.0, 0.0, 0.0)];
         assert!(!is_path_safe(&unsafe_path, &obstacles, &workspace, 0.1));
+    }
+
+    #[test]
+    fn a_path_frame_must_be_the_frame_of_the_scenario() {
+        assert!(check_frame(None, None).is_empty());
+        assert!(check_frame(None, Some("base")).is_empty());
+        assert!(check_frame(Some("base"), Some("base")).is_empty());
+        assert_eq!(
+            check_frame(Some("world"), Some("base")),
+            vec![PathSafetyIssue::PathFrameDoesNotMatch]
+        );
+        assert_eq!(
+            check_frame(Some("world"), None),
+            vec![PathSafetyIssue::PathFrameDoesNotMatch]
+        );
     }
 }
