@@ -18,14 +18,14 @@ GPL-3.0-or-later - see LICENSE
   <img src="https://img.shields.io/badge/License-GPL%203.0--or--later-blue.svg" alt="GPL 3.0 or later">
   <img src="https://img.shields.io/badge/Algorithm-RRT-orange.svg" alt="Algorithm">
   <img src="https://img.shields.io/badge/Engine-Rust-blue.svg" alt="Engine">
-  <img src="https://img.shields.io/badge/Tests-99%20passing-2ea44f.svg" alt="Tests">
+  <img src="https://img.shields.io/badge/Tests-151%20passing-2ea44f.svg" alt="Tests">
   <img src="https://img.shields.io/badge/Version-0.1.4-0f6cbd.svg" alt="Version">
   <img src="https://img.shields.io/badge/Maturity-functional-0F6CBD.svg" alt="Maturity">
 </p>
 
 ---
 
-**Verifica di onestà - cosa funziona davvero oggi:** la ricerca RRT a singolo agente in `src/rrt.rs` (con la sua vera scadenza `max_duration_ms` basata sull'orologio reale, indipendente da `max_iterations`), la matematica di collisione sfera/segmento di `src/obstacle.rs`, la matematica vettoriale di `src/geometry.rs`, il PRNG deterministico di `src/rng.rs`, il cancello di validazione degli scenari di `src/semantics.rs`, e la riverifica di sicurezza di un percorso già calcolato in `src/validate.rs` sono reali e testati (99 test, `cargo test`) - ogni percorso restituito è verificato privo di ostacoli nei test, non solo plausibile. La CLI (`run.sh scenarios/example.json`, più il sottocomando `validate`) è davvero utilizzabile oggi. Ciò che resta aspirazionale: questo è un RRT a thread singolo (con in più una modalità RRT* con passaggio di ricollegamento, disattivata per impostazione predefinita, `optimize_iterations`) e non un coordinatore multi-robot - le espressioni "fino a oltre 32 robot contemporaneamente" e "generazione di percorsi in meno di 50 ms" altrove in questo README descrivono un obiettivo futuro, non un risultato misurato; non c'è alcun C++ in nessuna parte di questo repository (Cargo.toml ha esattamente due dipendenze, `serde`/`serde_json`, nessun crate di parallelismo/thread), ed è una CLI su un file di scenario JSON, non ancora un servizio di rete collegato a HYDRA-UMC-JOB-DISPATCHER né validato contro un HYDRA-UMC-TWIN dal vivo. Vedi `CHANGELOG.md` per ciò che è stato consegnato finora esattamente, e `mejoras_futuras.txt` per l'elenco completo e onesto di ciò che è stato deliberatamente rimandato e perché.
+**Verifica di onestà - cosa funziona davvero oggi:** la ricerca RRT a singolo agente in `src/rrt.rs` (con la sua vera scadenza `max_duration_ms` basata sull'orologio reale, indipendente da `max_iterations`), la matematica di collisione sfera/segmento di `src/obstacle.rs`, la matematica vettoriale di `src/geometry.rs`, il PRNG deterministico di `src/rng.rs`, il cancello di validazione degli scenari di `src/semantics.rs`, e la riverifica di sicurezza di un percorso già calcolato in `src/validate.rs` sono reali e testati (151 test, `cargo test`) - ogni percorso restituito è verificato privo di ostacoli nei test, non solo plausibile. La CLI (`run.sh scenarios/example.json`, più il sottocomando `validate`) è davvero utilizzabile oggi. Ciò che resta aspirazionale: questo è un RRT a thread singolo (con in più una modalità RRT* con passaggio di ricollegamento, disattivata per impostazione predefinita, `optimize_iterations`) e non un coordinatore multi-robot - le espressioni "fino a oltre 32 robot contemporaneamente" e "generazione di percorsi in meno di 50 ms" altrove in questo README descrivono un obiettivo futuro, non un risultato misurato; non c'è alcun C++ in nessuna parte di questo repository (Cargo.toml ha esattamente due dipendenze, `serde`/`serde_json`, nessun crate di parallelismo/thread), ed è una CLI su un file di scenario JSON, non ancora un servizio di rete collegato a HYDRA-UMC-JOB-DISPATCHER né validato contro un HYDRA-UMC-TWIN dal vivo. Vedi `CHANGELOG.md` per ciò che è stato consegnato finora esattamente, e `mejoras_futuras.txt` per l'elenco completo e onesto di ciò che è stato deliberatamente rimandato e perché.
 
 ---
 
@@ -39,7 +39,7 @@ GPL-3.0-or-later - see LICENSE
 |---|---|
 | Versione | `0.1.4` |
 | Maturità | Funzionale |
-| Test | 99 (`cargo test`) |
+| Test | 151 (`cargo test`) |
 | Tecnologia | Rust / RRT* path planning |
 | Su hardware reale | Solo simulato: provato con emulatori, test double o simulatori; per questa versione non risulta alcuna esecuzione su hardware reale |
 
@@ -54,7 +54,7 @@ Ogni riga è una parte di questo repository e il semaforo dice a che punto è og
 | Area | Stato | Cosa significa qui |
 |---|---|---|
 | Software | 🟡 | Funziona per il suo scopo principale; la verifica di onestà qui sopra elenca ciò che manca ancora |
-| Test | 🟢 | 99 test automatici, eseguiti a ogni modifica |
+| Test | 🟢 | 151 test automatici, eseguiti a ogni modifica |
 | Hardware reale | 🟠 | Solo simulato: provato con emulatori, test double o simulatori; per questa versione non risulta alcuna esecuzione su hardware reale |
 | Integrazione | 🟠 | I suoi messaggi e le sue rotte sono verificati rispetto ai contratti condivisi dell'SDK; non ha ancora funzionato insieme all'apparecchiatura reale |
 | Distribuzione | 🟠 | Pubblicato come release; l'installazione su una macchina pulita è documentata ma non registrata |
@@ -76,7 +76,7 @@ Integra i dati di occupazione in tempo reale dai Vision Node e i vincoli cinemat
 
 ## 🧩 Ruolo in HYDRA-UMC
 
-**HYDRA-UMC-PATH-PLANNER-3D** pianifica un percorso senza collisioni per un robot in una scena di ostacoli sferici (ricerca RRT) e verifica un percorso rispetto a ostacoli e limiti dello spazio di lavoro. È una libreria e uno strumento da riga di comando in Rust; non pianifica ancora per più robot insieme. Il comando facoltativo `serve` avvia un piccolo server HTTP (spento salvo richiesta, solo loopback per impostazione predefinita, token facoltativo) che risponde soltanto a `GET /health` e `GET /metrics` (quest'ultimo solo quando lo apre la sezione `metrics` del file di configurazione) con numeri sul servizio; non pianifica nulla.
+**HYDRA-UMC-PATH-PLANNER-3D** pianifica un percorso senza collisioni per un robot in una scena di ostacoli sferici e a scatola (ricerca RRT; le zone di pericolo di un file di zone di sicurezza possono essere lette come scatole), pianifica più robot uno dopo l'altro nell'ordine della loro priorità (ognuno resta lontano dai percorsi dei precedenti; il tempo non è ancora una dimensione), pianifica per un braccio nello spazio dei suoi angoli di giunto e verifica un percorso rispetto a ostacoli e limiti dello spazio di lavoro. È una libreria e uno strumento da riga di comando in Rust. Il comando facoltativo `serve` avvia un piccolo server HTTP (spento salvo richiesta, solo loopback per impostazione predefinita, token facoltativo) che risponde a `GET /health` e a `GET /metrics` (quest'ultimo solo quando lo apre la sezione `metrics` del file di configurazione) con numeri sul servizio; `POST /plan`, che pianifica uno scenario inviato nel corpo, esiste solo quando lo apre la sezione `plan` di quel file, richiede il token fuori dal loopback e ha limiti di dimensione e di tempo.
 
 > **Piattaforma:** dove questo README dice CM5, intende il banco pilota che funziona oggi; la piattaforma di destinazione di HYDRA-UMC è un NVIDIA Jetson Orin NX da 16 GB, un progetto non costruito né provato.
 
@@ -128,7 +128,7 @@ cargo test
 
 ## 🧪 Test
 
-99 test automatici si eseguono con `cargo test`. Non richiedono hardware né nulla al di fuori di questa macchina.
+151 test automatici si eseguono con `cargo test`. Non richiedono hardware né nulla al di fuori di questa macchina.
 
 La CI esegue `HYDRA_UMC_CI=1 python tools/ci_validate.py`, che controlla il manifesto, i documenti, gli otto README e le immagini.
 
@@ -183,7 +183,7 @@ ricerca:
 cargo test   # geometria + collisione ostacoli, il PRNG, il
              # pianificatore RRT (incluso il suo vero limite di tempo
              # sull'orologio) e la riverifica di sicurezza di validate.rs -
-             # 99 test in totale
+             # 151 test in totale
 ```
 
 ## 📂 Struttura del repository

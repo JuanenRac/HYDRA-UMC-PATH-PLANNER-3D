@@ -18,7 +18,7 @@ GPL-3.0-or-later - see LICENSE
   <img src="https://img.shields.io/badge/License-GPL%203.0--or--later-blue.svg" alt="GPL 3.0 or later">
   <img src="https://img.shields.io/badge/Algorithm-RRT-orange.svg" alt="Algorithm">
   <img src="https://img.shields.io/badge/Engine-Rust-blue.svg" alt="Engine">
-  <img src="https://img.shields.io/badge/Tests-99%20passing-2ea44f.svg" alt="Tests">
+  <img src="https://img.shields.io/badge/Tests-151%20passing-2ea44f.svg" alt="Tests">
   <img src="https://img.shields.io/badge/Version-0.1.4-0f6cbd.svg" alt="Version">
   <img src="https://img.shields.io/badge/Maturity-functional-0F6CBD.svg" alt="Maturity">
 </p>
@@ -39,7 +39,7 @@ GPL-3.0-or-later - see LICENSE
 |---|---|
 | バージョン | `0.1.4` |
 | 成熟度 | 機能する |
-| テスト | 99 (`cargo test`) |
+| テスト | 151 (`cargo test`) |
 | 技術 | Rust / RRT* path planning |
 | 実機での確認 | シミュレーションのみ：エミュレーター、模擬部品、シミュレーターで試験済み。このバージョンについて実機での動作記録はありません |
 
@@ -54,7 +54,7 @@ GPL-3.0-or-later - see LICENSE
 | 領域 | 状態 | ここでの意味 |
 |---|---|---|
 | ソフトウェア | 🟡 | 主な目的では動作します。足りない点は上の正直さの確認に書かれています |
-| テスト | 🟢 | 自動テスト 99 件。変更のたびに実行されます |
+| テスト | 🟢 | 自動テスト 151 件。変更のたびに実行されます |
 | 実機 | 🟠 | シミュレーションのみ：エミュレーター、模擬部品、シミュレーターで試験済み。このバージョンについて実機での動作記録はありません |
 | 連携 | 🟠 | メッセージとルートは SDK の共通契約に照らして検証されていますが、実機と一緒に動かしたことはありません |
 | デプロイ | 🟠 | リリースとして公開されています。新しい環境へのインストールは文書化されていますが記録はありません |
@@ -81,7 +81,7 @@ GPL-3.0-or-later - see LICENSE
 
 ## 🧩 HYDRA-UMC での役割
 
-**HYDRA-UMC-PATH-PLANNER-3D** は、球形の障害物がある場面で 1 台のロボットの衝突しない経路を計画し（RRT 探索）、経路を障害物と作業空間の境界に照らして検証します。Rust のライブラリ兼コマンドラインツールで、複数台のロボットを同時に計画することはまだできません。 任意の `serve` コマンドは小さな HTTP リスナーを起動します（指定しない限り無効、既定ではループバックのみ、トークンは任意）。応答するのは `GET /health` と、サービス自体の数値を返す `GET /metrics`（後者は設定ファイルの `metrics` セクションで有効にした場合のみ） だけで、経路計画は行いません。
+**HYDRA-UMC-PATH-PLANNER-3D** は、球形と箱形の障害物がある場面で 1 台のロボットの衝突しない経路を計画し（RRT 探索。安全ゾーンのゾーンファイルの危険ゾーンは箱として読み込めます）、複数のロボットを優先順位の順に 1 台ずつ計画し（各ロボットは先に計画されたロボットの経路から離れます。時間はまだ次元ではありません）、アームを関節角の空間で計画し、経路を障害物と作業空間の境界に照らして検証します。Rust のライブラリ兼コマンドラインツールです。任意の `serve` コマンドは小さな HTTP リスナーを起動します（指定しない限り無効、既定ではループバックのみ、トークンは任意）。`GET /health` と、サービス自体の数値を返す `GET /metrics`（後者は設定ファイルの `metrics` セクションで有効にした場合のみ）に応答します。本文で送られたシナリオを計画する `POST /plan` は、そのファイルの `plan` セクションで有効にした場合にだけ存在し、ループバック以外ではトークンが必要で、サイズと時間の上限があります。
 
 > **プラットフォーム：** この README の「CM5」は、現在動作している試験用ベンチを指します。HYDRA-UMC の目標プラットフォームは NVIDIA Jetson Orin NX 16 GB ですが、これは製作も試験もされていない設計です。
 
@@ -133,7 +133,7 @@ cargo test
 
 ## 🧪 テスト
 
-`cargo test` で自動テスト 99 件を実行します。 ハードウェアも、このマシンの外にあるものも必要ありません。
+`cargo test` で自動テスト 151 件を実行します。 ハードウェアも、このマシンの外にあるものも必要ありません。
 
 CI は `HYDRA_UMC_CI=1 python tools/ci_validate.py` を実行し、マニフェスト、文書、8 つの README、図を検査します。
 
@@ -187,7 +187,7 @@ run.bat scenarios/example.json
 ```bash
 cargo test   # 幾何学 + 障害物の衝突判定、PRNG、RRT プランナー自体
              #(その実際の壁時計時間制限を含む)、そして validate.rs の
-             # 安全性再チェック - 合計 99 個のテスト
+             # 安全性再チェック - 合計 151 個のテスト
 ```
 
 ## 📂 リポジトリの構成
