@@ -435,3 +435,57 @@ fn a_goal_inside_a_box_a_wrong_box_and_the_shrink_of_a_box_scenario_are_refused(
     assert_eq!(code, Some(1));
     assert!(stderr.contains("box obstacles"), "{stderr}");
 }
+
+fn scenario_with_zones(zones: &str, name: &str) -> PathBuf {
+    let zones_path = temp(&format!("{name}-zones.json"), zones);
+    let zones_path = zones_path.to_string_lossy().replace('\', "/");
+    temp(
+        &format!("{name}-scenario.json"),
+        &format!(
+            r#"{{"start":{{"x":-3,"y":0,"z":0}},"goal":{{"x":3,"y":0,"z":0}},"zones_file":"{zones_path}",
+  "workspace":{{"min":{{"x":-5,"y":-5,"z":-5}},"max":{{"x":5,"y":5,"z":5}}}},"seed":3}}"#
+        ),
+    )
+}
+
+#[test]
+fn the_danger_zones_of_a_zones_file_are_avoided_and_the_warning_zones_are_not_used() {
+    let scenario = scenario_with_zones(
+        r#"{"zones":[
+          {"id":"wall","level":"danger","min":{"x":-0.2,"y":-5,"z":-5},"max":{"x":0.2,"y":1,"z":5}},
+          {"id":"everything","level":"warning","min":{"x":-5,"y":-5,"z":-5},"max":{"x":5,"y":5,"z":5}}]}"#,
+        "danger",
+    );
+    let (code, stdout, _) = run(&[&scenario]);
+    assert_eq!(code, Some(0), "{stdout}");
+    let planned = temp("danger-path.json", &stdout);
+    let (code, stdout, _) = run(&[Path::new("validate"), &scenario, &planned]);
+    assert_eq!(code, Some(0), "{stdout}");
+    let straight = temp(
+        "danger-straight.json",
+        r#"[{"x":-3,"y":0,"z":0},{"x":3,"y":0,"z":0}]"#,
+    );
+    let (code, stdout, _) = run(&[Path::new("validate"), &scenario, &straight]);
+    assert_eq!(code, Some(1), "{stdout}");
+    assert!(stdout.contains("SegmentIntersectsObstacle"), "{stdout}");
+}
+
+#[test]
+fn a_zones_file_that_cannot_be_read_or_holds_a_danger_zone_that_is_not_a_box_is_refused() {
+    let capsule = scenario_with_zones(
+        r#"{"zones":[{"id":"arm","level":"danger","shape":"capsule"}]}"#,
+        "capsule",
+    );
+    let (code, stdout, _) = run(&[&capsule]);
+    assert_eq!(code, Some(1), "{stdout}");
+    assert!(stdout.contains("invalid_input") && stdout.contains("arm"), "{stdout}");
+
+    let missing = temp(
+        "zones-missing.json",
+        r#"{"start":{"x":-3,"y":0,"z":0},"goal":{"x":3,"y":0,"z":0},"zones_file":"definitely-missing-zones.json",
+  "workspace":{"min":{"x":-5,"y":-5,"z":-5},"max":{"x":5,"y":5,"z":5}}}"#,
+    );
+    let (code, stdout, _) = run(&[&missing]);
+    assert_eq!(code, Some(1), "{stdout}");
+    assert!(stdout.contains("could not read the zones file"), "{stdout}");
+}

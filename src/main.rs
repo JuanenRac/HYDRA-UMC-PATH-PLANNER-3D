@@ -28,6 +28,7 @@ mod server;
 mod service_metrics;
 mod shrink;
 mod validate;
+mod zones;
 
 #[cfg(test)]
 mod corpus;
@@ -53,6 +54,9 @@ struct Scenario {
     /// Box obstacles (opposite corners `min` and `max`, in metres), next to the spheres.
     #[serde(default)]
     boxes: Vec<BoxObstacle>,
+    /// A zones file of HYDRA-UMC-SAFETY-ZONES: its danger zones (boxes) are avoided like `boxes` (see zones.rs). A relative path is read from the working directory.
+    #[serde(default)]
+    zones_file: Option<String>,
     workspace: Workspace,
     #[serde(default)]
     config: Option<PlannerConfig>,
@@ -84,6 +88,17 @@ fn round_path(path: Vec<Vec3>, decimals: Option<u8>) -> Vec<Vec3> {
 }
 
 impl Scenario {
+    /// The boxes of the scenario: its own `boxes` and the danger zones of its `zones_file`.
+    fn all_boxes(&self) -> Result<Vec<BoxObstacle>, String> {
+        let mut boxes = self.boxes.clone();
+        if let Some(path) = &self.zones_file {
+            let text = fs::read_to_string(path)
+                .map_err(|e| format!("could not read the zones file {path}: {e}"))?;
+            boxes.extend(zones::danger_boxes(&text)?);
+        }
+        Ok(boxes)
+    }
+
     /// Fills in the same defaults the bare invocation already applies
     /// (`config` -> `PlannerConfig::default()`, `seed` -> `1`), turning
     /// this sparse, hand-authorable shape into shrink.rs's always-fully-
@@ -218,10 +233,17 @@ fn run_validate(scenario_path: &str, path_path: &str) -> ExitCode {
         }
     };
     let robot_radius = scenario.config.unwrap_or_default().robot_radius;
+    let boxes = match scenario.all_boxes() {
+        Ok(boxes) => boxes,
+        Err(reason) => {
+            eprintln!("[path-planner-3d] invalid scenario {scenario_path}: {reason}");
+            return ExitCode::FAILURE;
+        }
+    };
     let mut issues = validate_path_with_boxes(
         &path,
         &scenario.obstacles,
-        &scenario.boxes,
+        &boxes,
         &scenario.workspace,
         robot_radius,
     );
@@ -295,9 +317,9 @@ fn run_shrink(scenario_path: &str, out_path: Option<&str>) -> ExitCode {
             return ExitCode::FAILURE;
         }
     };
-    if !scenario.boxes.is_empty() {
+    if !scenario.boxes.is_empty() || scenario.zones_file.is_some() {
         eprintln!(
-            "[path-planner-3d] shrink does not handle box obstacles yet: {scenario_path} has a boxes list"
+            "[path-planner-3d] shrink does not handle box obstacles yet: {scenario_path} has a boxes list or a zones file"
         );
         return ExitCode::FAILURE;
     }
@@ -461,11 +483,24 @@ fn main() -> ExitCode {
     let config = scenario.config.unwrap_or_default();
     let seed = scenario.seed.unwrap_or(1);
 
+    let boxes = match scenario.all_boxes() {
+        Ok(boxes) => boxes,
+        Err(reason) => {
+            let outcome = PlanOutcome::Error {
+                reason: format!("invalid_input: {reason}"),
+            };
+            if let Ok(json) = serde_json::to_string_pretty(&outcome) {
+                println!("{json}");
+            }
+            return failure_code("invalid_input", distinct_codes);
+        }
+    };
+
     let outcome = match plan_with_boxes(
         scenario.start,
         scenario.goal,
         &scenario.obstacles,
-        &scenario.boxes,
+        &boxes,
         scenario.workspace,
         config,
         seed,
