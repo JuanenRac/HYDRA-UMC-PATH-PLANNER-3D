@@ -36,7 +36,7 @@ mod zones;
 mod corpus;
 
 use geometry::Vec3;
-use obstacle::{BoxObstacle, Obstacle};
+use obstacle::{Obstacle, Solid};
 use rrt::{plan_with_boxes, PlanError, PlannerConfig, Workspace};
 use serde::{Deserialize, Serialize};
 use shrink::{planner_output_is_unsafe, shrink_scenario};
@@ -55,7 +55,7 @@ struct Scenario {
     obstacles: Vec<Obstacle>,
     /// Box obstacles (opposite corners `min` and `max`, in metres), next to the spheres.
     #[serde(default)]
-    boxes: Vec<BoxObstacle>,
+    boxes: Vec<Solid>,
     /// A zones file of HYDRA-UMC-SAFETY-ZONES: its danger zones (boxes) are avoided like `boxes` (see zones.rs). A relative path is read from the working directory.
     #[serde(default)]
     zones_file: Option<String>,
@@ -91,7 +91,7 @@ fn round_path(path: Vec<Vec3>, decimals: Option<u8>) -> Vec<Vec3> {
 
 impl Scenario {
     /// The boxes of the scenario: its own `boxes` and the danger zones of its `zones_file`.
-    fn all_boxes(&self) -> Result<Vec<BoxObstacle>, String> {
+    fn all_boxes(&self) -> Result<Vec<Solid>, String> {
         let mut boxes = self.boxes.clone();
         if let Some(path) = &self.zones_file {
             let text = fs::read_to_string(path)

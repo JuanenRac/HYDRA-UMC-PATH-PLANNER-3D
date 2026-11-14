@@ -123,6 +123,172 @@ impl BoxObstacle {
     }
 }
 
+/// Euler angles in degrees, as the zones files of HYDRA-UMC-SAFETY-ZONES write them: the local axes are rotated by `R = Rz(yaw) * Ry(pitch) * Rx(roll)`.
+/// A missing angle is 0.
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize)]
+pub struct Rotation {
+    #[serde(default)]
+    pub roll: f64,
+    #[serde(default)]
+    pub pitch: f64,
+    #[serde(default)]
+    pub yaw: f64,
+}
+
+impl Rotation {
+    /// The matrix of `R`, row by row (it takes a vector of the box frame to the world frame).
+    fn matrix(&self) -> [[f64; 3]; 3] {
+        let (sr, cr) = self.roll.to_radians().sin_cos();
+        let (sp, cp) = self.pitch.to_radians().sin_cos();
+        let (sy, cy) = self.yaw.to_radians().sin_cos();
+        [
+            [cy * cp, -sy * cr + cy * sp * sr, sy * sr + cy * sp * cr],
+            [sy * cp, cy * cr + sy * sp * sr, -cy * sr + sy * sp * cr],
+            [-sp, cp * sr, cp * cr],
+        ]
+    }
+
+    pub fn is_finite(&self) -> bool {
+        self.roll.is_finite() && self.pitch.is_finite() && self.yaw.is_finite()
+    }
+}
+
+/// An oriented box (a fence that is not aligned with the axes, a tilted table): its `center`, its `half_extents` (each at least 0, in metres) and its
+/// `rotation` in degrees. Like the aligned box it is inflated by the clearance on every side, so the rounded corners the sphere would leave are counted
+/// as filled and the check stays on the safe side.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+pub struct ObbObstacle {
+    pub center: Vec3,
+    pub half_extents: Vec3,
+    #[serde(default)]
+    pub rotation_deg: Rotation,
+}
+
+impl ObbObstacle {
+    /// `point` in the frame of the box (`R` transposed times the offset from the centre).
+    fn in_local_frame(&self, point: Vec3, m: &[[f64; 3]; 3]) -> Vec3 {
+        let d = point.sub(self.center);
+        Vec3::new(
+            m[0][0] * d.x + m[1][0] * d.y + m[2][0] * d.z,
+            m[0][1] * d.x + m[1][1] * d.y + m[2][1] * d.z,
+            m[0][2] * d.x + m[1][2] * d.y + m[2][2] * d.z,
+        )
+    }
+
+    /// The same box in its own frame, centred on the origin: a box aligned with the axes.
+    fn local_box(&self) -> BoxObstacle {
+        BoxObstacle {
+            min: self.half_extents.scale(-1.0),
+            max: self.half_extents,
+        }
+    }
+
+    pub fn contains_point(&self, point: Vec3, clearance: f64) -> bool {
+        let m = self.rotation_deg.matrix();
+        self.local_box()
+            .contains_point(self.in_local_frame(point, &m), clearance)
+    }
+
+    /// True if the segment `a`-`b` touches this box inflated by `clearance`: the segment is taken to the frame of the box and the slab test of the
+    /// aligned box is applied there (a rotation keeps the distances, so the inflation is the same).
+    pub fn intersects_segment(&self, a: Vec3, b: Vec3, clearance: f64) -> bool {
+        let m = self.rotation_deg.matrix();
+        self.local_box().intersects_segment(
+            self.in_local_frame(a, &m),
+            self.in_local_frame(b, &m),
+            clearance,
+        )
+    }
+}
+
+/// A capsule (a link of a robot, a conveyor edge, a pole): every point within `radius` of the segment `start`-`end`. Equal ends make a sphere.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+pub struct CapsuleObstacle {
+    pub start: Vec3,
+    pub end: Vec3,
+    pub radius: f64,
+}
+
+impl CapsuleObstacle {
+    pub fn contains_point(&self, point: Vec3, clearance: f64) -> bool {
+        segment_distance(point, point, self.start, self.end) <= self.radius + clearance
+    }
+
+    /// True if the segment `a`-`b` comes within `radius + clearance` of the axis of the capsule (the distance between two segments).
+    pub fn intersects_segment(&self, a: Vec3, b: Vec3, clearance: f64) -> bool {
+        segment_distance(a, b, self.start, self.end) <= self.radius + clearance
+    }
+}
+
+/// The shortest distance between the segments `p1`-`q1` and `p2`-`q2` (a point is a segment of zero length; two parallel segments are handled).
+fn segment_distance(p1: Vec3, q1: Vec3, p2: Vec3, q2: Vec3) -> f64 {
+    const EPS: f64 = 1e-12;
+    let d1 = q1.sub(p1);
+    let d2 = q2.sub(p2);
+    let r = p1.sub(p2);
+    let a = d1.dot(d1);
+    let e = d2.dot(d2);
+    let f = d2.dot(r);
+    if a <= EPS && e <= EPS {
+        return p1.distance(p2);
+    }
+    // the parameters of the closest points along each segment, both in 0..1
+    let (s, t) = if a <= EPS {
+        (0.0, (f / e).clamp(0.0, 1.0))
+    } else {
+        let c = d1.dot(r);
+        if e <= EPS {
+            ((-c / a).clamp(0.0, 1.0), 0.0)
+        } else {
+            let b = d1.dot(d2);
+            let denom = a * e - b * b;
+            let s0 = if denom > EPS {
+                ((b * f - c * e) / denom).clamp(0.0, 1.0)
+            } else {
+                0.0
+            };
+            let t0 = (b * s0 + f) / e;
+            if t0 < 0.0 {
+                ((-c / a).clamp(0.0, 1.0), 0.0)
+            } else if t0 > 1.0 {
+                (((b - c) / a).clamp(0.0, 1.0), 1.0)
+            } else {
+                (s0, t0)
+            }
+        }
+    };
+    p1.add(d1.scale(s)).distance(p2.add(d2.scale(t)))
+}
+
+/// A solid obstacle other than a sphere, as a scenario lists it in `boxes`: an aligned box (`min`, `max`), an oriented box (`center`,
+/// `half_extents`, `rotation_deg`) or a capsule (`start`, `end`, `radius`). Each is told apart by its own fields, so a list written for the aligned
+/// boxes alone reads as before.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum Solid {
+    Capsule(CapsuleObstacle),
+    Obb(ObbObstacle),
+    Aabb(BoxObstacle),
+}
+
+impl Solid {
+    pub fn contains_point(&self, point: Vec3, clearance: f64) -> bool {
+        match self {
+            Solid::Aabb(s) => s.contains_point(point, clearance),
+            Solid::Obb(s) => s.contains_point(point, clearance),
+            Solid::Capsule(s) => s.contains_point(point, clearance),
+        }
+    }
+
+    pub fn intersects_segment(&self, a: Vec3, b: Vec3, clearance: f64) -> bool {
+        match self {
+            Solid::Aabb(s) => s.intersects_segment(a, b, clearance),
+            Solid::Obb(s) => s.intersects_segment(a, b, clearance),
+            Solid::Capsule(s) => s.intersects_segment(a, b, clearance),
+        }
+    }
+}
+
 /// Boxes are padded by this much so that rounding can never make the
 /// hierarchy skip an obstacle the exact check would report.
 const BOX_MARGIN: f64 = 1e-9;
@@ -214,7 +380,7 @@ enum Node {
 /// A bounding-volume hierarchy over a fixed set of spherical obstacles.
 #[derive(Debug)]
 pub struct ObstacleIndex {
-    boxes: Vec<BoxObstacle>,
+    boxes: Vec<Solid>,
     obstacles: Vec<Obstacle>,
     nodes: Vec<Node>,
 }
@@ -237,7 +403,7 @@ impl ObstacleIndex {
     }
 
     /// The same hierarchy, plus the boxes of the scenario (tested one by one: a scene has few of them).
-    pub fn with_boxes(obstacles: &[Obstacle], boxes: &[BoxObstacle]) -> Self {
+    pub fn with_boxes(obstacles: &[Obstacle], boxes: &[Solid]) -> Self {
         let mut index = Self::new(obstacles);
         index.boxes = boxes.to_vec();
         index
@@ -577,7 +743,7 @@ mod box_tests {
 
     #[test]
     fn the_index_with_boxes_reports_a_box_even_when_there_is_no_sphere() {
-        let index = ObstacleIndex::with_boxes(&[], &[wall()]);
+        let index = ObstacleIndex::with_boxes(&[], &[Solid::Aabb(wall())]);
         assert!(index.any_intersects_segment(
             Vec3::new(-2.0, 0.0, 0.0),
             Vec3::new(2.0, 0.0, 0.0),
@@ -594,5 +760,426 @@ mod box_tests {
             Vec3::new(2.0, 0.0, 0.0),
             0.1
         ));
+    }
+}
+
+#[cfg(test)]
+mod solid_tests {
+    use super::*;
+    use crate::rng::Xorshift64Star;
+    use crate::rrt::{plan_with_boxes, PlanError, PlannerConfig, Workspace};
+    use crate::semantics::{validate_boxes, InvalidScenarioReason};
+    use crate::validate::validate_path_with_boxes;
+
+    fn v(x: f64, y: f64, z: f64) -> Vec3 {
+        Vec3::new(x, y, z)
+    }
+
+    fn obb(center: Vec3, half: Vec3, roll: f64, pitch: f64, yaw: f64) -> ObbObstacle {
+        ObbObstacle {
+            center,
+            half_extents: half,
+            rotation_deg: Rotation { roll, pitch, yaw },
+        }
+    }
+
+    fn capsule(start: Vec3, end: Vec3, radius: f64) -> CapsuleObstacle {
+        CapsuleObstacle { start, end, radius }
+    }
+
+    #[test]
+    fn an_oriented_box_without_rotation_answers_like_the_aligned_box() {
+        let mut rng = Xorshift64Star::new(2024);
+        for _ in 0..400 {
+            let center = v(
+                rng.next_range(-3.0, 3.0),
+                rng.next_range(-3.0, 3.0),
+                rng.next_range(-3.0, 3.0),
+            );
+            let half = v(
+                rng.next_range(0.1, 2.0),
+                rng.next_range(0.1, 2.0),
+                rng.next_range(0.1, 2.0),
+            );
+            let aligned = BoxObstacle {
+                min: center.sub(half),
+                max: center.add(half),
+            };
+            let oriented = obb(center, half, 0.0, 0.0, 0.0);
+            let clearance = rng.next_range(0.0, 0.5);
+            let a = v(
+                rng.next_range(-8.0, 8.0),
+                rng.next_range(-8.0, 8.0),
+                rng.next_range(-8.0, 8.0),
+            );
+            let b = v(
+                rng.next_range(-8.0, 8.0),
+                rng.next_range(-8.0, 8.0),
+                rng.next_range(-8.0, 8.0),
+            );
+            assert_eq!(
+                aligned.contains_point(a, clearance),
+                oriented.contains_point(a, clearance)
+            );
+            assert_eq!(
+                aligned.intersects_segment(a, b, clearance),
+                oriented.intersects_segment(a, b, clearance)
+            );
+        }
+    }
+
+    #[test]
+    fn a_quarter_turn_about_z_swaps_the_long_side() {
+        let long = obb(v(0.0, 0.0, 0.0), v(2.0, 0.5, 0.5), 0.0, 0.0, 90.0);
+        assert!(
+            long.contains_point(v(0.0, 1.5, 0.0), 0.0),
+            "the long side now lies along y"
+        );
+        assert!(
+            !long.contains_point(v(1.5, 0.0, 0.0), 0.0),
+            "and no longer along x"
+        );
+        let flat = obb(v(0.0, 0.0, 0.0), v(2.0, 0.5, 0.5), 0.0, 0.0, 0.0);
+        assert!(flat.contains_point(v(1.5, 0.0, 0.0), 0.0));
+        assert!(!flat.contains_point(v(0.0, 1.5, 0.0), 0.0));
+    }
+
+    #[test]
+    fn a_diagonal_box_holds_the_diagonal_and_not_the_other_corner() {
+        let fence = obb(v(0.0, 0.0, 0.0), v(1.0, 0.1, 0.1), 0.0, 0.0, 45.0);
+        assert!(fence.contains_point(v(0.7, 0.7, 0.0), 0.0));
+        assert!(!fence.contains_point(v(0.7, -0.7, 0.0), 0.0));
+        // a segment across the diagonal hits it, a segment parallel and apart does not
+        assert!(fence.intersects_segment(v(0.7, -0.7, 0.0), v(-0.7, 0.7, 0.0), 0.0));
+        assert!(!fence.intersects_segment(v(0.7, -0.7, 0.0), v(1.5, -0.7, 0.0), 0.0));
+    }
+
+    #[test]
+    fn roll_and_pitch_tilt_the_box_and_a_tilted_one_is_not_where_the_aligned_one_is() {
+        let slab = obb(v(0.0, 0.0, 0.0), v(2.0, 2.0, 0.1), 0.0, 90.0, 0.0);
+        // a pitch of 90 degrees stands the slab up: its thin side is now along x
+        assert!(slab.contains_point(v(0.0, 1.5, 1.5), 0.0));
+        assert!(!slab.contains_point(v(1.5, 0.0, 0.0), 0.0));
+        let rolled = obb(v(0.0, 0.0, 0.0), v(0.1, 2.0, 2.0), 90.0, 0.0, 0.0);
+        assert!(
+            rolled.contains_point(v(0.0, 1.5, 1.5), 0.0),
+            "a roll of 90 degrees keeps a square section"
+        );
+        let long = obb(v(0.0, 0.0, 0.0), v(0.1, 2.0, 0.1), 90.0, 0.0, 0.0);
+        assert!(
+            long.contains_point(v(0.0, 0.0, 1.5), 0.0),
+            "a roll of 90 degrees turns y into z"
+        );
+        assert!(!long.contains_point(v(0.0, 1.5, 0.0), 0.0));
+    }
+
+    #[test]
+    fn the_clearance_inflates_an_oriented_box_and_touching_counts_as_inside() {
+        let b = obb(v(1.0, 1.0, 0.0), v(1.0, 0.5, 0.5), 0.0, 0.0, 90.0);
+        // after the quarter turn the box spans x 0.5..1.5 and y 0..2
+        assert!(
+            b.contains_point(v(1.5, 1.0, 0.0), 0.0),
+            "the face counts as inside"
+        );
+        assert!(!b.contains_point(v(1.6, 1.0, 0.0), 0.0));
+        assert!(b.contains_point(v(1.6, 1.0, 0.0), 0.1 + 1e-9));
+    }
+
+    #[test]
+    fn a_zero_size_oriented_box_is_a_point_and_a_segment_inside_the_box_hits() {
+        let point = obb(v(1.0, 1.0, 1.0), v(0.0, 0.0, 0.0), 10.0, 20.0, 30.0);
+        assert!(point.contains_point(v(1.0, 1.0, 1.0), 0.0));
+        assert!(!point.contains_point(v(1.1, 1.0, 1.0), 0.0));
+        let big = obb(v(0.0, 0.0, 0.0), v(3.0, 3.0, 3.0), 15.0, 25.0, 35.0);
+        assert!(
+            big.intersects_segment(v(-0.5, 0.0, 0.0), v(0.5, 0.0, 0.0), 0.0),
+            "wholly inside"
+        );
+        assert!(
+            big.intersects_segment(v(0.0, 0.0, 0.0), v(0.0, 0.0, 0.0), 0.0),
+            "a zero-length segment inside"
+        );
+        assert!(
+            !big.intersects_segment(v(9.0, 9.0, 9.0), v(9.0, 9.0, 9.0), 0.0),
+            "and one outside"
+        );
+    }
+
+    #[test]
+    fn a_capsule_holds_the_points_within_its_radius_of_the_axis_ends_included() {
+        let pole = capsule(v(0.0, 0.0, 0.0), v(4.0, 0.0, 0.0), 0.5);
+        assert!(
+            pole.contains_point(v(2.0, 0.5, 0.0), 0.0),
+            "touching counts"
+        );
+        assert!(!pole.contains_point(v(2.0, 0.51, 0.0), 0.0));
+        assert!(
+            pole.contains_point(v(4.4, 0.0, 0.0), 0.0),
+            "the rounded end"
+        );
+        assert!(!pole.contains_point(v(4.6, 0.0, 0.0), 0.0));
+        assert!(
+            !pole.contains_point(v(4.4, 0.4, 0.0), 0.0),
+            "a corner of the box around it is not in the capsule"
+        );
+        assert!(
+            pole.contains_point(v(2.0, 0.7, 0.0), 0.2 + 1e-9),
+            "the clearance inflates it"
+        );
+    }
+
+    #[test]
+    fn a_segment_crossing_or_near_the_axis_of_a_capsule_hits_it() {
+        let pole = capsule(v(0.0, 0.0, 0.0), v(4.0, 0.0, 0.0), 0.5);
+        assert!(
+            pole.intersects_segment(v(2.0, -3.0, 0.0), v(2.0, 3.0, 0.0), 0.0),
+            "across"
+        );
+        // a skew segment one metre above the axis: it hits only when the clearance closes the gap
+        assert!(!pole.intersects_segment(v(2.0, -3.0, 1.0), v(2.0, 3.0, 1.0), 0.0));
+        assert!(pole.intersects_segment(v(2.0, -3.0, 1.0), v(2.0, 3.0, 1.0), 0.5 + 1e-9));
+        // parallel and apart
+        assert!(!pole.intersects_segment(v(0.0, 2.0, 0.0), v(4.0, 2.0, 0.0), 0.0));
+        assert!(pole.intersects_segment(v(0.0, 2.0, 0.0), v(4.0, 2.0, 0.0), 1.5 + 1e-9));
+        // collinear and overlapping, and collinear beyond the end
+        assert!(pole.intersects_segment(v(3.0, 0.0, 0.0), v(8.0, 0.0, 0.0), 0.0));
+        assert!(!pole.intersects_segment(v(6.0, 0.0, 0.0), v(8.0, 0.0, 0.0), 0.0));
+        assert!(pole.intersects_segment(v(6.0, 0.0, 0.0), v(8.0, 0.0, 0.0), 1.5 + 1e-9));
+    }
+
+    #[test]
+    fn a_capsule_with_equal_ends_is_a_sphere_and_a_point_segment_is_handled() {
+        let ball = capsule(v(1.0, 1.0, 1.0), v(1.0, 1.0, 1.0), 0.5);
+        let sphere = Obstacle::new(v(1.0, 1.0, 1.0), 0.5);
+        let mut rng = Xorshift64Star::new(77);
+        for _ in 0..300 {
+            let a = v(
+                rng.next_range(-3.0, 4.0),
+                rng.next_range(-3.0, 4.0),
+                rng.next_range(-3.0, 4.0),
+            );
+            let b = v(
+                rng.next_range(-3.0, 4.0),
+                rng.next_range(-3.0, 4.0),
+                rng.next_range(-3.0, 4.0),
+            );
+            let clearance = rng.next_range(0.0, 0.4);
+            assert_eq!(
+                ball.contains_point(a, clearance),
+                sphere.contains_point(a, clearance)
+            );
+            assert_eq!(
+                ball.intersects_segment(a, b, clearance),
+                sphere.intersects_segment(a, b, clearance)
+            );
+        }
+        let pole = capsule(v(0.0, 0.0, 0.0), v(4.0, 0.0, 0.0), 0.5);
+        assert!(
+            pole.intersects_segment(v(2.0, 0.3, 0.0), v(2.0, 0.3, 0.0), 0.0),
+            "a zero-length segment near the axis"
+        );
+        assert!(!pole.intersects_segment(v(2.0, 3.0, 0.0), v(2.0, 3.0, 0.0), 0.0));
+    }
+
+    #[test]
+    fn the_distance_between_segments_is_symmetric_and_never_above_the_distance_of_any_two_of_their_points(
+    ) {
+        let mut rng = Xorshift64Star::new(5);
+        for _ in 0..300 {
+            let mut p = || {
+                v(
+                    rng.next_range(-4.0, 4.0),
+                    rng.next_range(-4.0, 4.0),
+                    rng.next_range(-4.0, 4.0),
+                )
+            };
+            let (a, b, c, d) = (p(), p(), p(), p());
+            let forward = segment_distance(a, b, c, d);
+            let backward = segment_distance(c, d, a, b);
+            assert!((forward - backward).abs() < 1e-9, "{forward} {backward}");
+            assert!(
+                forward <= a.distance(c) + 1e-9
+                    && forward <= b.distance(d) + 1e-9
+                    && forward <= a.distance(d) + 1e-9
+            );
+            assert!(forward >= 0.0);
+        }
+    }
+
+    #[test]
+    fn a_scenario_list_of_aligned_boxes_still_reads_and_the_new_shapes_read_next_to_them() {
+        let text = r#"[
+            {"min":{"x":0,"y":0,"z":0},"max":{"x":1,"y":1,"z":1}},
+            {"shape":"aabb","min":{"x":2,"y":0,"z":0},"max":{"x":3,"y":1,"z":1}},
+            {"center":{"x":0,"y":0,"z":0},"half_extents":{"x":1,"y":2,"z":3},"rotation_deg":{"yaw":30}},
+            {"center":{"x":0,"y":0,"z":0},"half_extents":{"x":1,"y":2,"z":3}},
+            {"start":{"x":0,"y":0,"z":0},"end":{"x":0,"y":0,"z":1},"radius":0.2}]"#;
+        let solids: Vec<Solid> = serde_json::from_str(text).unwrap();
+        assert!(matches!(solids[0], Solid::Aabb(_)));
+        assert!(
+            matches!(solids[1], Solid::Aabb(_)),
+            "a stray shape key is ignored as before"
+        );
+        assert!(matches!(solids[2], Solid::Obb(b) if b.rotation_deg.yaw == 30.0));
+        assert!(matches!(solids[3], Solid::Obb(b) if b.rotation_deg.yaw == 0.0));
+        assert!(matches!(solids[4], Solid::Capsule(b) if b.radius == 0.2));
+        assert!(serde_json::from_str::<Vec<Solid>>(r#"[{"min":{"x":0,"y":0,"z":0}}]"#).is_err());
+        assert!(serde_json::from_str::<Vec<Solid>>(r#"[{"radius":1}]"#).is_err());
+    }
+
+    #[test]
+    fn the_index_reports_an_oriented_box_and_a_capsule_even_when_there_is_no_sphere() {
+        let solids = [
+            Solid::Obb(obb(v(0.0, 0.0, 0.0), v(1.0, 0.2, 0.2), 0.0, 0.0, 90.0)),
+            Solid::Capsule(capsule(v(5.0, 0.0, 0.0), v(5.0, 0.0, 3.0), 0.3)),
+        ];
+        let index = ObstacleIndex::with_boxes(&[], &solids);
+        assert!(
+            index.any_intersects_segment(v(0.0, -2.0, 0.0), v(0.0, 2.0, 0.0), 0.0),
+            "across the turned box"
+        );
+        assert!(!index.any_intersects_segment(v(-2.0, -2.0, 0.0), v(-2.0, 2.0, 0.0), 0.0));
+        assert!(
+            index.any_intersects_segment(v(4.0, 0.0, 1.0), v(6.0, 0.0, 1.0), 0.0),
+            "across the pole"
+        );
+        assert!(
+            !index.any_intersects_segment(v(4.0, 0.0, 4.0), v(6.0, 0.0, 4.0), 0.0),
+            "above the pole"
+        );
+    }
+
+    #[test]
+    fn a_solid_that_is_not_finite_or_is_upside_down_is_an_invalid_scenario() {
+        let finite = Solid::Obb(obb(v(0.0, 0.0, 0.0), v(1.0, 1.0, 1.0), 0.0, 0.0, 0.0));
+        assert!(validate_boxes(&[finite]).is_ok());
+        let nan_center = Solid::Obb(obb(v(f64::NAN, 0.0, 0.0), v(1.0, 1.0, 1.0), 0.0, 0.0, 0.0));
+        assert!(matches!(
+            validate_boxes(&[finite, nan_center]),
+            Err(InvalidScenarioReason::NonFiniteBox { index: 1 })
+        ));
+        let nan_angle = Solid::Obb(obb(
+            v(0.0, 0.0, 0.0),
+            v(1.0, 1.0, 1.0),
+            0.0,
+            f64::INFINITY,
+            0.0,
+        ));
+        assert!(matches!(
+            validate_boxes(&[nan_angle]),
+            Err(InvalidScenarioReason::NonFiniteBox { index: 0 })
+        ));
+        let negative = Solid::Obb(obb(v(0.0, 0.0, 0.0), v(1.0, -1.0, 1.0), 0.0, 0.0, 0.0));
+        assert!(matches!(
+            validate_boxes(&[negative]),
+            Err(InvalidScenarioReason::InvertedBox { index: 0 })
+        ));
+        let flat = Solid::Obb(obb(v(0.0, 0.0, 0.0), v(1.0, 0.0, 1.0), 0.0, 0.0, 0.0));
+        assert!(
+            validate_boxes(&[flat]).is_ok(),
+            "a half extent of 0 is a plate"
+        );
+        let bad_radius = Solid::Capsule(capsule(v(0.0, 0.0, 0.0), v(1.0, 0.0, 0.0), -0.1));
+        assert!(matches!(
+            validate_boxes(&[bad_radius]),
+            Err(InvalidScenarioReason::InvertedBox { index: 0 })
+        ));
+        let nan_end = Solid::Capsule(capsule(v(0.0, 0.0, 0.0), v(f64::NAN, 0.0, 0.0), 0.1));
+        assert!(matches!(
+            validate_boxes(&[nan_end]),
+            Err(InvalidScenarioReason::NonFiniteBox { index: 0 })
+        ));
+        let sphere_like = Solid::Capsule(capsule(v(0.0, 0.0, 0.0), v(0.0, 0.0, 0.0), 0.0));
+        assert!(
+            validate_boxes(&[sphere_like]).is_ok(),
+            "a radius of 0 on equal ends is a point"
+        );
+    }
+
+    fn open_workspace() -> Workspace {
+        Workspace {
+            min: v(-10.0, -10.0, -10.0),
+            max: v(10.0, 10.0, 10.0),
+        }
+    }
+
+    fn config() -> PlannerConfig {
+        PlannerConfig {
+            max_iterations: 20_000,
+            ..PlannerConfig::default()
+        }
+    }
+
+    #[test]
+    fn a_plan_goes_around_a_turned_wall_and_a_pole_and_the_independent_check_agrees() {
+        let start = v(-6.0, 0.0, 0.0);
+        let goal = v(6.0, 0.0, 0.0);
+        let solids = [
+            // a wall across the way, turned 20 degrees, wider than the gap a straight line would need
+            Solid::Obb(obb(v(0.0, 0.0, 0.0), v(0.3, 3.0, 10.0), 0.0, 0.0, 20.0)),
+            // and a pole beyond it
+            Solid::Capsule(capsule(v(3.0, 3.0, -10.0), v(3.0, 3.0, 10.0), 1.0)),
+        ];
+        let path = plan_with_boxes(start, goal, &[], &solids, open_workspace(), config(), 7)
+            .expect("there is a way around a wall that does not span the workspace");
+        let radius = config().robot_radius;
+        for window in path.windows(2) {
+            for solid in &solids {
+                assert!(
+                    !solid.intersects_segment(window[0], window[1], radius),
+                    "{:?}->{:?} clips {solid:?}",
+                    window[0],
+                    window[1]
+                );
+            }
+        }
+        let issues = validate_path_with_boxes(&path, &[], &solids, &open_workspace(), radius);
+        assert!(issues.is_empty(), "{issues:?}");
+    }
+
+    #[test]
+    fn a_start_or_a_goal_inside_an_oriented_box_or_a_capsule_is_refused_before_the_search() {
+        let solids = [
+            Solid::Obb(obb(v(0.0, 0.0, 0.0), v(1.0, 1.0, 1.0), 0.0, 0.0, 45.0)),
+            Solid::Capsule(capsule(v(5.0, 0.0, 0.0), v(7.0, 0.0, 0.0), 0.5)),
+        ];
+        let inside_box = plan_with_boxes(
+            v(0.0, 0.0, 0.0),
+            v(9.0, 9.0, 9.0),
+            &[],
+            &solids,
+            open_workspace(),
+            config(),
+            1,
+        );
+        assert_eq!(inside_box, Err(PlanError::StartInsideObstacle));
+        let inside_capsule = plan_with_boxes(
+            v(-9.0, -9.0, -9.0),
+            v(6.0, 0.0, 0.0),
+            &[],
+            &solids,
+            open_workspace(),
+            config(),
+            1,
+        );
+        assert_eq!(inside_capsule, Err(PlanError::GoalInsideObstacle));
+    }
+
+    #[test]
+    fn the_independent_check_finds_a_path_through_a_turned_box_and_a_capsule() {
+        let solids = [
+            Solid::Obb(obb(v(0.0, 0.0, 0.0), v(1.0, 0.2, 5.0), 0.0, 0.0, 45.0)),
+            Solid::Capsule(capsule(v(0.0, 5.0, -5.0), v(0.0, 5.0, 5.0), 0.5)),
+        ];
+        let through_box = [v(-3.0, -3.0, 0.0), v(3.0, 3.0, 0.0)];
+        let issues = validate_path_with_boxes(&through_box, &[], &solids, &open_workspace(), 0.1);
+        assert_eq!(issues.len(), 1, "{issues:?}");
+        let through_pole = [v(-3.0, 5.0, 0.0), v(3.0, 5.0, 0.0)];
+        assert!(
+            !validate_path_with_boxes(&through_pole, &[], &solids, &open_workspace(), 0.1)
+                .is_empty()
+        );
+        let clear = [v(-3.0, 3.0, 0.0), v(3.0, 3.0, 0.0)];
+        assert!(validate_path_with_boxes(&clear, &[], &solids, &open_workspace(), 0.1).is_empty());
     }
 }

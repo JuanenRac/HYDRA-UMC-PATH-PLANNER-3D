@@ -11,7 +11,7 @@
 // without the other program (the numbers can be compared with its `fk --envelope`). Collisions of the arm with itself are not checked.
 
 use crate::geometry::Vec3;
-use crate::obstacle::{BoxObstacle, Obstacle};
+use crate::obstacle::{Obstacle, Solid};
 use crate::rng::Xorshift64Star;
 use serde::Deserialize;
 
@@ -139,7 +139,7 @@ pub struct ArmScenario {
     #[serde(default)]
     pub obstacles: Vec<Obstacle>,
     #[serde(default)]
-    pub boxes: Vec<BoxObstacle>,
+    pub boxes: Vec<Solid>,
     #[serde(default)]
     pub config: ArmConfig,
     #[serde(default)]
@@ -185,7 +185,7 @@ pub fn link_points(arm: &Arm, q: &[f64]) -> Vec<Vec3> {
 }
 
 /// True if any link, with its radius, touches a sphere or a box of the scenario in the configuration `q`.
-pub fn in_collision(arm: &Arm, q: &[f64], obstacles: &[Obstacle], boxes: &[BoxObstacle]) -> bool {
+pub fn in_collision(arm: &Arm, q: &[f64], obstacles: &[Obstacle], boxes: &[Solid]) -> bool {
     link_points(arm, q).windows(2).any(|link| {
         obstacles
             .iter()
@@ -355,6 +355,7 @@ pub fn plan_arm(scenario: &ArmScenario) -> Result<Vec<Vec<f64>>, ArmError> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::obstacle::BoxObstacle;
 
     fn planar_arm() -> Arm {
         // two links of one metre in the plane z = 0, both joints turning about z
@@ -431,10 +432,10 @@ mod tests {
             &sphere,
             &[]
         ));
-        let wall = [BoxObstacle {
+        let wall = [Solid::Aabb(BoxObstacle {
             min: Vec3::new(1.4, -1.0, -1.0),
             max: Vec3::new(1.6, 1.0, 1.0),
-        }];
+        })];
         assert!(in_collision(&arm, &[0.0, 0.0], &[], &wall));
         assert!(!in_collision(
             &arm,
@@ -526,10 +527,10 @@ mod tests {
     fn a_goal_inside_a_box_is_refused_before_the_search() {
         // a wall that the goal arm crosses
         let mut s = scenario([0.0, 0.0], [std::f64::consts::FRAC_PI_2, 0.0], Vec::new());
-        s.boxes = vec![BoxObstacle {
+        s.boxes = vec![Solid::Aabb(BoxObstacle {
             min: Vec3::new(-5.0, 0.5, -5.0),
             max: Vec3::new(5.0, 0.7, 5.0),
-        }];
+        })];
         s.goal = vec![std::f64::consts::FRAC_PI_2, 0.0];
         // the goal arm points along +y and crosses the wall, so the goal itself is in collision
         assert_eq!(plan_arm(&s), Err(ArmError::GoalInCollision));
@@ -578,10 +579,10 @@ mod tests {
         );
         refused(
             &|s| {
-                s.boxes = vec![BoxObstacle {
+                s.boxes = vec![Solid::Aabb(BoxObstacle {
                     min: Vec3::new(1.0, 0.0, 0.0),
                     max: Vec3::new(0.0, 1.0, 1.0),
-                }]
+                })]
             },
             "InvertedBox",
         );

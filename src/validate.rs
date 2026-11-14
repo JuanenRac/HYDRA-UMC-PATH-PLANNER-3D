@@ -15,7 +15,7 @@
 // second path planner.
 
 use crate::geometry::Vec3;
-use crate::obstacle::{BoxObstacle, Obstacle};
+use crate::obstacle::{Obstacle, Solid};
 use crate::rrt::Workspace;
 use serde::Serialize;
 
@@ -92,7 +92,7 @@ pub fn validate_path(
 pub fn validate_path_with_boxes(
     path: &[Vec3],
     obstacles: &[Obstacle],
-    boxes: &[BoxObstacle],
+    boxes: &[Solid],
     workspace: &Workspace,
     robot_radius: f64,
 ) -> Vec<PathSafetyIssue> {

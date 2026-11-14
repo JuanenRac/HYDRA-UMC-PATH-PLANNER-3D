@@ -18,7 +18,7 @@
 
 use crate::geometry::Vec3;
 use crate::kdtree::KdTree;
-use crate::obstacle::{BoxObstacle, Obstacle, ObstacleIndex};
+use crate::obstacle::{Obstacle, ObstacleIndex, Solid};
 use crate::rng::Xorshift64Star;
 use serde::{Deserialize, Serialize};
 use std::time::{Duration, Instant};
@@ -158,7 +158,7 @@ pub fn plan_with_boxes(
     start: Vec3,
     goal: Vec3,
     obstacles: &[Obstacle],
-    boxes: &[BoxObstacle],
+    boxes: &[Solid],
     workspace: Workspace,
     config: PlannerConfig,
     seed: u64,
