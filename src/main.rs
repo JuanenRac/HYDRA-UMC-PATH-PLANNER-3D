@@ -304,7 +304,8 @@ enum ShrinkOutcome {
 /// reports it - to stdout, or to `out_path` when given, always in the
 /// same JSON shape the plain CLI invocation itself accepts, so the
 /// minimized case is directly replayable.
-/// Plans several robots in the order of their priority (see fleet.rs): the earlier robots' paths are kept clear by the later ones.
+/// Plans several robots in the order of their priority (see fleet.rs): the earlier robots' paths are kept clear by the later ones, in space and,
+/// with a `timing` section, in time (each robot then also gets the time it departs and the time it arrives).
 fn run_fleet(fleet_path: &str) -> ExitCode {
     let raw = match fs::read_to_string(fleet_path) {
         Ok(raw) => raw,
@@ -320,14 +321,18 @@ fn run_fleet(fleet_path: &str) -> ExitCode {
             return ExitCode::FAILURE;
         }
     };
-    let results = fleet::plan_fleet(&fleet);
-    let all_ok = results.iter().all(|(_, r)| r.is_ok());
-    let robots: Vec<serde_json::Value> = results
+    let plans = fleet::plan_fleet_scheduled(&fleet);
+    let all_ok = plans.iter().all(|plan| plan.result.is_ok());
+    let robots: Vec<serde_json::Value> = plans
         .into_iter()
-        .map(|(id, result)| match result {
-            Ok(path) => serde_json::json!({"id": id, "status": "ok", "path": path}),
+        .map(|plan| match plan.result {
+            Ok(path) => match plan.schedule {
+                Some(schedule) => serde_json::json!({"id": plan.id, "status": "ok", "path": path,
+                    "departs_at": schedule.departs_at, "arrives_at": schedule.arrives_at}),
+                None => serde_json::json!({"id": plan.id, "status": "ok", "path": path}),
+            },
             Err(e) => {
-                serde_json::json!({"id": id, "status": "error", "reason": plan_error_reason(e)})
+                serde_json::json!({"id": plan.id, "status": "error", "reason": plan_error_reason(e)})
             }
         })
         .collect();

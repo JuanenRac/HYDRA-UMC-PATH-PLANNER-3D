@@ -535,6 +535,30 @@ fn the_fleet_command_plans_the_robots_in_order_and_reports_each() {
     assert!(stderr.contains("could not read"), "{stderr}");
 }
 
+#[test]
+fn the_fleet_command_with_timing_reports_when_each_robot_departs_and_arrives() {
+    let fleet = temp(
+        "fleet-timed.json",
+        r#"{"workspace":{"min":{"x":-5,"y":-5,"z":-5},"max":{"x":5,"y":5,"z":5}},
+  "timing":{"speed":1.0,"max_wait":60,"wait_step":1},
+  "robots":[
+    {"id":"a","start":{"x":-3,"y":0,"z":0},"goal":{"x":3,"y":0,"z":0},"seed":1},
+    {"id":"b","start":{"x":0,"y":-3,"z":0},"goal":{"x":0,"y":3,"z":0},"seed":2}]}"#,
+    );
+    let (code, stdout, _) = run(&[Path::new("fleet"), &fleet]);
+    assert_eq!(code, Some(0), "{stdout}");
+    let parsed: serde_json::Value = serde_json::from_str(&stdout).unwrap();
+    assert_eq!(parsed["status"], "ok");
+    let robots = parsed["robots"].as_array().unwrap();
+    assert_eq!(robots[0]["departs_at"], 0.0);
+    assert!(robots[0]["arrives_at"].as_f64().unwrap() >= 6.0);
+    assert!(
+        robots[1]["departs_at"].as_f64().unwrap() > 0.0,
+        "the second robot waits for the first to pass: {stdout}"
+    );
+    assert!(robots[1]["arrives_at"].as_f64().unwrap() > robots[1]["departs_at"].as_f64().unwrap());
+}
+
 const ARM: &str = r#"{"arm":{"joints":[
     {"name":"shoulder","origin":{"x":0,"y":0,"z":0},"axis":{"x":0,"y":0,"z":1},"lower":-3.0,"upper":3.0},
     {"name":"elbow","origin":{"x":1,"y":0,"z":0},"axis":{"x":0,"y":0,"z":1},"lower":-3.0,"upper":3.0}],
