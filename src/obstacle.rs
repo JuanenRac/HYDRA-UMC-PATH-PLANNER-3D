@@ -166,7 +166,7 @@ pub struct ObbObstacle {
 
 impl ObbObstacle {
     /// `point` in the frame of the box (`R` transposed times the offset from the centre).
-    fn to_local(&self, point: Vec3, m: &[[f64; 3]; 3]) -> Vec3 {
+    fn in_local_frame(&self, point: Vec3, m: &[[f64; 3]; 3]) -> Vec3 {
         let d = point.sub(self.center);
         Vec3::new(
             m[0][0] * d.x + m[1][0] * d.y + m[2][0] * d.z,
@@ -186,15 +186,18 @@ impl ObbObstacle {
     pub fn contains_point(&self, point: Vec3, clearance: f64) -> bool {
         let m = self.rotation_deg.matrix();
         self.local_box()
-            .contains_point(self.to_local(point, &m), clearance)
+            .contains_point(self.in_local_frame(point, &m), clearance)
     }
 
     /// True if the segment `a`-`b` touches this box inflated by `clearance`: the segment is taken to the frame of the box and the slab test of the
     /// aligned box is applied there (a rotation keeps the distances, so the inflation is the same).
     pub fn intersects_segment(&self, a: Vec3, b: Vec3, clearance: f64) -> bool {
         let m = self.rotation_deg.matrix();
-        self.local_box()
-            .intersects_segment(self.to_local(a, &m), self.to_local(b, &m), clearance)
+        self.local_box().intersects_segment(
+            self.in_local_frame(a, &m),
+            self.in_local_frame(b, &m),
+            clearance,
+        )
     }
 }
 
