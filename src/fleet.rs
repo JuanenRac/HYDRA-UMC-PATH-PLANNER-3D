@@ -16,7 +16,7 @@
 // comes closer to another than the sum of their radii (the earlier one inflated as in the version without timing).
 
 use crate::geometry::Vec3;
-use crate::obstacle::{BoxObstacle, Obstacle};
+use crate::obstacle::{Obstacle, Solid};
 use crate::rrt::{plan_with_boxes, PlanError, PlannerConfig, Workspace};
 use serde::Deserialize;
 
@@ -67,7 +67,7 @@ pub struct Fleet {
     #[serde(default)]
     pub obstacles: Vec<Obstacle>,
     #[serde(default)]
-    pub boxes: Vec<BoxObstacle>,
+    pub boxes: Vec<Solid>,
     pub workspace: Workspace,
     /// When present the robots share time as well as space (see the top of this file).
     #[serde(default)]
@@ -231,7 +231,7 @@ type PathPlanner = fn(
     Vec3,
     Vec3,
     &[Obstacle],
-    &[BoxObstacle],
+    &[Solid],
     Workspace,
     PlannerConfig,
     u64,
@@ -505,7 +505,7 @@ mod tests {
         start: Vec3,
         goal: Vec3,
         obstacles: &[Obstacle],
-        _boxes: &[BoxObstacle],
+        _boxes: &[Solid],
         _workspace: Workspace,
         _config: PlannerConfig,
         _seed: u64,

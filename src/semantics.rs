@@ -20,7 +20,7 @@
 // "no path found" verdict that looks like an honest planning outcome.
 
 use crate::geometry::Vec3;
-use crate::obstacle::{BoxObstacle, Obstacle};
+use crate::obstacle::{Obstacle, Solid};
 use crate::rrt::{PlannerConfig, Workspace};
 use serde::Serialize;
 
@@ -100,14 +100,40 @@ pub fn validate_obstacles(obstacles: &[Obstacle]) -> Result<(), InvalidScenarioR
     Ok(())
 }
 
-/// Every corner of every box must be finite, and `min` must not be above `max` on any axis (an inverted box has no volume to avoid).
-pub fn validate_boxes(boxes: &[BoxObstacle]) -> Result<(), InvalidScenarioReason> {
-    for (index, b) in boxes.iter().enumerate() {
-        if !b.min.is_finite() || !b.max.is_finite() {
-            return Err(InvalidScenarioReason::NonFiniteBox { index });
-        }
-        if b.min.x > b.max.x || b.min.y > b.max.y || b.min.z > b.max.z {
-            return Err(InvalidScenarioReason::InvertedBox { index });
+/// Every number of every solid must be finite. An aligned box must not have `min` above `max` on any axis, an oriented box no negative half extent and a
+/// capsule no negative radius (an inverted solid has no volume to avoid).
+pub fn validate_boxes(boxes: &[Solid]) -> Result<(), InvalidScenarioReason> {
+    for (index, solid) in boxes.iter().enumerate() {
+        match solid {
+            Solid::Aabb(b) => {
+                if !b.min.is_finite() || !b.max.is_finite() {
+                    return Err(InvalidScenarioReason::NonFiniteBox { index });
+                }
+                if b.min.x > b.max.x || b.min.y > b.max.y || b.min.z > b.max.z {
+                    return Err(InvalidScenarioReason::InvertedBox { index });
+                }
+            }
+            // an oriented box: finite numbers, and half extents of at least 0 (a negative one is an inverted box)
+            Solid::Obb(b) => {
+                if !b.center.is_finite()
+                    || !b.half_extents.is_finite()
+                    || !b.rotation_deg.is_finite()
+                {
+                    return Err(InvalidScenarioReason::NonFiniteBox { index });
+                }
+                if b.half_extents.x < 0.0 || b.half_extents.y < 0.0 || b.half_extents.z < 0.0 {
+                    return Err(InvalidScenarioReason::InvertedBox { index });
+                }
+            }
+            // a capsule: finite numbers and a radius of at least 0 (a negative radius is a shape upside down)
+            Solid::Capsule(b) => {
+                if !b.start.is_finite() || !b.end.is_finite() || !b.radius.is_finite() {
+                    return Err(InvalidScenarioReason::NonFiniteBox { index });
+                }
+                if b.radius < 0.0 {
+                    return Err(InvalidScenarioReason::InvertedBox { index });
+                }
+            }
         }
     }
     Ok(())
