@@ -221,10 +221,21 @@ pub fn plan_fleet(fleet: &Fleet) -> Vec<(String, Result<Vec<Vec3>, PlanError>)> 
 /// The result for every robot, in the order of the fleet, with the schedule of each when the fleet has a `timing` section.
 pub fn plan_fleet_scheduled(fleet: &Fleet) -> Vec<FleetPlan> {
     match fleet.timing {
-        Some(timing) => plan_timed(fleet, timing),
+        Some(timing) => plan_timed(fleet, timing, plan_with_boxes),
         None => plan_untimed(fleet),
     }
 }
+
+/// What plans the path of one robot alone: the sampling planner, or a stand-in in the tests.
+type PathPlanner = fn(
+    Vec3,
+    Vec3,
+    &[Obstacle],
+    &[BoxObstacle],
+    Workspace,
+    PlannerConfig,
+    u64,
+) -> Result<Vec<Vec3>, PlanError>;
 
 fn plan_untimed(fleet: &Fleet) -> Vec<FleetPlan> {
     let mut obstacles = fleet.obstacles.clone();
@@ -253,7 +264,7 @@ fn plan_untimed(fleet: &Fleet) -> Vec<FleetPlan> {
     plans
 }
 
-fn plan_timed(fleet: &Fleet, timing: Timing) -> Vec<FleetPlan> {
+fn plan_timed(fleet: &Fleet, timing: Timing, plan_path: PathPlanner) -> Vec<FleetPlan> {
     let default_speed = positive_or(timing.speed, 1.0);
     let step = positive_or(timing.wait_step, 1.0);
     let max_wait = if timing.max_wait.is_finite() && timing.max_wait >= 0.0 {
@@ -276,7 +287,7 @@ fn plan_timed(fleet: &Fleet, timing: Timing) -> Vec<FleetPlan> {
         } else {
             0.0
         };
-        let alone = plan_with_boxes(
+        let alone = plan_path(
             robot.start,
             robot.goal,
             &fleet.obstacles,
@@ -306,7 +317,7 @@ fn plan_timed(fleet: &Fleet, timing: Timing) -> Vec<FleetPlan> {
                     // no departure works: keep clear of the whole path of every earlier robot, as without timing
                     let mut obstacles = fleet.obstacles.clone();
                     obstacles.extend(reserved.iter().copied());
-                    match plan_with_boxes(
+                    match plan_path(
                         robot.start,
                         robot.goal,
                         &obstacles,
@@ -488,34 +499,29 @@ mod tests {
         ]
     }
 
-    /// The crossing fleet with the second robot given the earliest departure at which, leaving at once, it would meet the first one: the paths
-    /// of the planner are not straight, so the time of the meeting is found from the paths themselves instead of being assumed.
-    fn meeting() -> (Vec<FleetRobot>, f64) {
-        let mut robots = crossing();
-        let config = PlannerConfig::default();
-        let alone = |robot: &FleetRobot| {
-            plan_with_boxes(
-                robot.start,
-                robot.goal,
-                &[],
-                &[],
-                workspace(),
-                config,
-                robot.seed.unwrap_or(1),
-            )
-            .expect("a robot alone in the empty workspace has a path")
-        };
-        let first = Trajectory::new(&alone(&robots[0]), 0.0, 1.0, config.robot_radius);
-        let second = alone(&robots[1]);
-        let start_time = (0..400)
-            .map(|i| f64::from(i) * 0.05)
-            .find(|&s| {
-                let later = Trajectory::new(&second, s, 1.0, config.robot_radius);
-                in_conflict(&first, &later)
-            })
-            .expect("the paths of the two robots come close to each other at some time");
-        robots[1].start_time = start_time;
-        (robots, start_time)
+    /// A stand-in for the sampling planner, so that where two robots meet does not depend on the random paths: a straight line when nothing is in
+    /// the way, and a line that goes up and over the middle when there are obstacles (the paths of the earlier robots).
+    fn straight_or_over(
+        start: Vec3,
+        goal: Vec3,
+        obstacles: &[Obstacle],
+        _boxes: &[BoxObstacle],
+        _workspace: Workspace,
+        _config: PlannerConfig,
+        _seed: u64,
+    ) -> Result<Vec<Vec3>, PlanError> {
+        if obstacles.is_empty() {
+            Ok(vec![start, goal])
+        } else {
+            let middle = start
+                .add(goal.sub(start).scale(0.5))
+                .add(Vec3::new(0.0, 0.0, 2.0));
+            Ok(vec![start, middle, goal])
+        }
+    }
+
+    fn plan_straight(fleet: &Fleet) -> Vec<FleetPlan> {
+        plan_timed(fleet, fleet.timing.unwrap(), straight_or_over)
     }
 
     /// The smallest distance between two robots at any time, found by sampling the time finely.
@@ -586,16 +592,13 @@ mod tests {
 
     #[test]
     fn a_robot_that_would_cross_an_earlier_one_in_time_leaves_later_and_keeps_its_distance() {
-        let (robots, earliest) = meeting();
-        let plans = plan_fleet_scheduled(&timed(robots, 60.0));
+        // straight lines that cross at the middle, where both would be at the same time
+        let plans = plan_straight(&timed(crossing(), 60.0));
         let (a, b) = (&plans[0], &plans[1]);
         let (path_a, path_b) = (a.result.as_ref().unwrap(), b.result.as_ref().unwrap());
         let (schedule_a, schedule_b) = (a.schedule.unwrap(), b.schedule.unwrap());
         assert_eq!(schedule_a.departs_at, 0.0);
-        assert!(
-            schedule_b.departs_at > earliest,
-            "b should wait: {schedule_b:?}"
-        );
+        assert!(schedule_b.departs_at > 0.0, "b should wait: {schedule_b:?}");
         assert!(schedule_b.arrives_at > schedule_b.departs_at);
         let radius = PlannerConfig::default().robot_radius;
         let ta = Trajectory::new(path_a, schedule_a.departs_at, 1.0, radius);
@@ -618,19 +621,19 @@ mod tests {
 
     #[test]
     fn with_no_time_to_wait_the_second_robot_goes_around_the_first_as_without_timing() {
-        let (robots, earliest) = meeting();
-        let plans = plan_fleet_scheduled(&timed(robots, 0.0));
+        let plans = plan_straight(&timed(crossing(), 0.0));
         let b = &plans[1];
-        assert_eq!(b.schedule.unwrap().departs_at, earliest);
+        assert_eq!(b.schedule.unwrap().departs_at, 0.0);
+        // the path planned with the whole path of the first robot in the way, as without timing
         let path_b = b.result.as_ref().unwrap();
-        let untimed = plan_fleet(&Fleet {
-            robots: crossing(),
-            obstacles: Vec::new(),
-            boxes: Vec::new(),
-            workspace: workspace(),
-            timing: None,
-        });
-        assert_eq!(Ok(path_b.clone()), untimed[1].1);
+        assert_eq!(
+            path_b,
+            &vec![
+                Vec3::new(0.0, -3.0, 0.0),
+                Vec3::new(0.0, 0.0, 2.0),
+                Vec3::new(0.0, 3.0, 0.0)
+            ]
+        );
     }
 
     #[test]
