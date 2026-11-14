@@ -210,6 +210,7 @@ fn positive_or(value: f64, default: f64) -> f64 {
 }
 
 /// The result for every robot, in the order of the fleet.
+#[cfg(test)]
 pub fn plan_fleet(fleet: &Fleet) -> Vec<(String, Result<Vec<Vec3>, PlanError>)> {
     plan_fleet_scheduled(fleet)
         .into_iter()
@@ -487,6 +488,36 @@ mod tests {
         ]
     }
 
+    /// The crossing fleet with the second robot given the earliest departure at which, leaving at once, it would meet the first one: the paths
+    /// of the planner are not straight, so the time of the meeting is found from the paths themselves instead of being assumed.
+    fn meeting() -> (Vec<FleetRobot>, f64) {
+        let mut robots = crossing();
+        let config = PlannerConfig::default();
+        let alone = |robot: &FleetRobot| {
+            plan_with_boxes(
+                robot.start,
+                robot.goal,
+                &[],
+                &[],
+                workspace(),
+                config,
+                robot.seed.unwrap_or(1),
+            )
+            .expect("a robot alone in the empty workspace has a path")
+        };
+        let first = Trajectory::new(&alone(&robots[0]), 0.0, 1.0, config.robot_radius);
+        let second = alone(&robots[1]);
+        let start_time = (0..400)
+            .map(|i| f64::from(i) * 0.05)
+            .find(|&s| {
+                let later = Trajectory::new(&second, s, 1.0, config.robot_radius);
+                in_conflict(&first, &later)
+            })
+            .expect("the paths of the two robots come close to each other at some time");
+        robots[1].start_time = start_time;
+        (robots, start_time)
+    }
+
     /// The smallest distance between two robots at any time, found by sampling the time finely.
     fn closest(a: &Trajectory, b: &Trajectory) -> f64 {
         let end = a.arrives_at().max(b.arrives_at());
@@ -555,12 +586,16 @@ mod tests {
 
     #[test]
     fn a_robot_that_would_cross_an_earlier_one_in_time_leaves_later_and_keeps_its_distance() {
-        let plans = plan_fleet_scheduled(&timed(crossing(), 60.0));
+        let (robots, earliest) = meeting();
+        let plans = plan_fleet_scheduled(&timed(robots, 60.0));
         let (a, b) = (&plans[0], &plans[1]);
         let (path_a, path_b) = (a.result.as_ref().unwrap(), b.result.as_ref().unwrap());
         let (schedule_a, schedule_b) = (a.schedule.unwrap(), b.schedule.unwrap());
         assert_eq!(schedule_a.departs_at, 0.0);
-        assert!(schedule_b.departs_at > 0.0, "b should wait: {schedule_b:?}");
+        assert!(
+            schedule_b.departs_at > earliest,
+            "b should wait: {schedule_b:?}"
+        );
         assert!(schedule_b.arrives_at > schedule_b.departs_at);
         let radius = PlannerConfig::default().robot_radius;
         let ta = Trajectory::new(path_a, schedule_a.departs_at, 1.0, radius);
@@ -583,9 +618,10 @@ mod tests {
 
     #[test]
     fn with_no_time_to_wait_the_second_robot_goes_around_the_first_as_without_timing() {
-        let plans = plan_fleet_scheduled(&timed(crossing(), 0.0));
+        let (robots, earliest) = meeting();
+        let plans = plan_fleet_scheduled(&timed(robots, 0.0));
         let b = &plans[1];
-        assert_eq!(b.schedule.unwrap().departs_at, 0.0);
+        assert_eq!(b.schedule.unwrap().departs_at, earliest);
         let path_b = b.result.as_ref().unwrap();
         let untimed = plan_fleet(&Fleet {
             robots: crossing(),
