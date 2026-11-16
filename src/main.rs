@@ -43,7 +43,7 @@ use shrink::{planner_output_is_unsafe, shrink_scenario};
 use std::env;
 use std::fs;
 use std::process::ExitCode;
-use validate::{check_endpoints, check_frame, validate_path_with_boxes, PathSafetyIssue};
+use validate::{check_endpoints, check_frame_required, validate_path_with_boxes, PathSafetyIssue};
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 
@@ -195,7 +195,7 @@ enum PathFile {
 /// workspace, without running a new search - a fail-safe re-check
 /// before a robot actually executes the path for real. New subcommand
 /// alongside the unchanged bare `<scenario.json>` invocation.
-fn run_validate(scenario_path: &str, path_path: &str) -> ExitCode {
+fn run_validate(scenario_path: &str, path_path: &str, require_frame: bool) -> ExitCode {
     let scenario_raw = match fs::read_to_string(scenario_path) {
         Ok(raw) => raw,
         Err(e) => {
@@ -250,7 +250,13 @@ fn run_validate(scenario_path: &str, path_path: &str) -> ExitCode {
         robot_radius,
     );
     issues.extend(check_endpoints(&path, scenario.start, scenario.goal));
-    let frame_issues = check_frame(path_frame.as_deref(), frame.as_deref());
+    if path_frame.is_none() && frame.is_some() && !require_frame {
+        eprintln!(
+            "[path-planner-3d] the path declares no frame but the scenario is in {:?}: it is taken as being in that frame (add --require-frame to refuse it)",
+            frame
+        );
+    }
+    let frame_issues = check_frame_required(path_frame.as_deref(), frame.as_deref(), require_frame);
     if !frame_issues.is_empty() {
         eprintln!(
             "[path-planner-3d] the path is in frame {:?} but the scenario is in {:?}",
@@ -549,13 +555,22 @@ fn main() -> ExitCode {
 
     if args.get(1).map(String::as_str) == Some("validate") {
         let (Some(scenario_path), Some(path_path)) = (args.get(2), args.get(3)) else {
-            eprintln!("Usage: hydra-umc-path-planner-3d validate <scenario.json> <path.json>");
+            eprintln!("Usage: hydra-umc-path-planner-3d validate <scenario.json> <path.json> [--require-frame]");
             eprintln!(
                 "<path.json> is a bare JSON array of {{\"x\":.., \"y\":.., \"z\":..}} waypoints."
             );
             return ExitCode::FAILURE;
         };
-        return run_validate(scenario_path, path_path);
+        let mut require_frame = false;
+        for extra in &args[4..] {
+            if extra == "--require-frame" {
+                require_frame = true;
+            } else {
+                eprintln!("[path-planner-3d] unknown option for validate: {extra}");
+                return ExitCode::FAILURE;
+            }
+        }
+        return run_validate(scenario_path, path_path, require_frame);
     }
 
     if args.get(1).map(String::as_str) == Some("fleet") {
@@ -599,7 +614,7 @@ fn main() -> ExitCode {
 
     let Some(scenario_path) = args.get(1) else {
         eprintln!("Usage: hydra-umc-path-planner-3d <scenario.json>   (\"-\" reads the scenario from standard input; add --exit-codes for 1 no path, 2 invalid input, 3 time limit)");
-        eprintln!("       hydra-umc-path-planner-3d validate <scenario.json> <path.json>");
+        eprintln!("       hydra-umc-path-planner-3d validate <scenario.json> <path.json> [--require-frame]");
         eprintln!("       hydra-umc-path-planner-3d shrink <scenario.json> [--out <minimal.json>]");
         eprintln!("       hydra-umc-path-planner-3d serve [--addr HOST:PORT] [--token TOKEN] [--allow-anonymous] [--config FILE]   (off unless asked for; GET /health, and GET /metrics only when the configuration opens it)");
         eprintln!("See scenarios/example.json for the expected format.");

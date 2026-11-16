@@ -110,6 +110,9 @@ pub struct ArmConfig {
     pub step_rad: f64,
     /// the largest change of any joint between two configurations that are checked on a straight move
     pub resolution_rad: f64,
+    /// the farthest, in metres, that any point of the arm may travel between two configurations that are checked on a straight move; the
+    /// number of checks grows until the bound holds, so a thin obstacle cannot fit between two of them
+    pub sweep_m: f64,
     /// how near the goal a node must be to try the last move
     pub goal_threshold_rad: f64,
     pub goal_bias: f64,
@@ -121,6 +124,7 @@ impl Default for ArmConfig {
         ArmConfig {
             step_rad: 0.3,
             resolution_rad: 0.05,
+            sweep_m: 0.05,
             goal_threshold_rad: 0.3,
             goal_bias: 0.1,
             max_iterations: 5000,
@@ -245,6 +249,7 @@ fn validate(scenario: &ArmScenario) -> Result<(), ArmError> {
     for (name, value) in [
         ("step_rad", c.step_rad),
         ("resolution_rad", c.resolution_rad),
+        ("sweep_m", c.sweep_m),
         ("goal_threshold_rad", c.goal_threshold_rad),
     ] {
         if !(value.is_finite() && value > 0.0) {
@@ -276,14 +281,32 @@ fn distance(a: &[f64], b: &[f64]) -> f64 {
         .sqrt()
 }
 
-/// True if every configuration on the straight move from `a` to `b` is free (`a` is taken as free, `b` is checked).
+/// The most checks of one straight move: a bound so that a very small `sweep_m` cannot make one move take for ever.
+const MAX_STEPS_PER_MOVE: f64 = 100_000.0;
+
+/// An upper bound of how far any point of the arm travels while the joints go from `a` to `b` on a straight move of the joint space: the sum, over
+/// the joints, of the change of the angle times the farthest the arm reaches from that joint (the lengths of the origins after it, and the tip).
+fn sweep_bound(arm: &Arm, a: &[f64], b: &[f64]) -> f64 {
+    let mut reach = arm.tip.length();
+    let mut total = 0.0;
+    for ((joint, x), y) in arm.joints.iter().zip(a).zip(b).rev() {
+        total += (y - x).abs() * reach;
+        reach += joint.origin.length();
+    }
+    total
+}
+
+/// True if every configuration on the straight move from `a` to `b` is free (`a` is taken as free, `b` is checked). The configurations checked are
+/// close enough that no point of the arm travels more than `sweep_m` between two of them, besides the `resolution_rad` of the widest joint.
 fn move_is_free(scenario: &ArmScenario, a: &[f64], b: &[f64]) -> bool {
     let widest = a
         .iter()
         .zip(b)
         .map(|(x, y)| (y - x).abs())
         .fold(0.0, f64::max);
-    let steps = (widest / scenario.config.resolution_rad).ceil().max(1.0) as usize;
+    let by_angle = widest / scenario.config.resolution_rad;
+    let by_sweep = sweep_bound(&scenario.arm, a, b) / scenario.config.sweep_m;
+    let steps = by_angle.max(by_sweep).ceil().clamp(1.0, MAX_STEPS_PER_MOVE) as usize;
     (1..=steps).all(|i| {
         let t = i as f64 / steps as f64;
         let q: Vec<f64> = a.iter().zip(b).map(|(x, y)| x + (y - x) * t).collect();
@@ -566,6 +589,8 @@ mod tests {
         refused(&|s| s.arm.joints[0].upper = f64::NAN, "limits");
         refused(&|s| s.start = vec![0.0, f64::NAN], "outside the limits");
         refused(&|s| s.config.resolution_rad = -1.0, "resolution_rad");
+        refused(&|s| s.config.sweep_m = 0.0, "sweep_m");
+        refused(&|s| s.config.sweep_m = f64::NAN, "sweep_m");
         refused(&|s| s.config.goal_threshold_rad = 0.0, "goal_threshold_rad");
         refused(&|s| s.config.goal_bias = 1.5, "goal_bias");
         refused(&|s| s.config.max_iterations = 0, "max_iterations");
@@ -592,6 +617,64 @@ mod tests {
         assert!(ArmError::Invalid("x".into())
             .reason()
             .starts_with("invalid_input"));
+    }
+
+    fn one_joint_scenario(resolution_rad: f64, sweep_m: f64) -> ArmScenario {
+        // one joint turning a tip one metre away about the z axis, links as thin as a line
+        let arm = Arm {
+            base: None,
+            joints: vec![ArmJoint {
+                name: String::new(),
+                origin: Vec3::new(0.0, 0.0, 0.0),
+                rpy: None,
+                axis: Vec3::new(0.0, 0.0, 1.0),
+                lower: -1.0,
+                upper: 1.0,
+            }],
+            tip: Vec3::new(1.0, 0.0, 0.0),
+            link_radius: 0.0,
+        };
+        // a small sphere on the circle of the tip, between two of the configurations a coarse check would visit
+        let angle: f64 = 0.275;
+        ArmScenario {
+            arm,
+            start: vec![-1.0],
+            goal: vec![1.0],
+            obstacles: vec![Obstacle::new(
+                Vec3::new(angle.cos(), angle.sin(), 0.0),
+                0.03,
+            )],
+            boxes: Vec::new(),
+            config: ArmConfig {
+                resolution_rad,
+                sweep_m,
+                ..ArmConfig::default()
+            },
+            seed: None,
+        }
+    }
+
+    #[test]
+    fn a_thin_obstacle_cannot_hide_between_two_checked_configurations() {
+        // checked every half radian, the straight move looks free: the sphere is hit by none of the configurations visited
+        let coarse = one_joint_scenario(0.5, 1000.0);
+        assert!(move_is_free(&coarse, &coarse.start, &coarse.goal));
+        // with the bound on the travel of the arm the same move is refused
+        let bounded = one_joint_scenario(0.5, 0.05);
+        assert!(!move_is_free(&bounded, &bounded.start, &bounded.goal));
+        // and the planner does not return the straight move
+        assert_ne!(
+            plan_arm(&bounded),
+            Ok(vec![bounded.start.clone(), bounded.goal.clone()])
+        );
+    }
+
+    #[test]
+    fn the_bound_of_the_travel_adds_the_joints_and_the_reach_after_each() {
+        let arm = planar_arm();
+        // shoulder 0.1 rad with 2 m of arm after it, elbow 0.2 rad with 1 m after it
+        let bound = sweep_bound(&arm, &[0.0, 0.0], &[0.1, 0.2]);
+        assert!((bound - (0.1 * 2.0 + 0.2 * 1.0)).abs() < 1e-12, "{bound}");
     }
 
     #[test]

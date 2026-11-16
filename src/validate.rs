@@ -205,10 +205,22 @@ pub fn check_endpoints(path: &[Vec3], start: Vec3, goal: Vec3) -> Vec<PathSafety
 /// Does the frame a path file declares agree with the frame of the scenario?
 /// A path without a declared frame (the bare array of waypoints) is accepted as
 /// before; one that declares a frame must declare the scenario's own.
+#[cfg(test)]
 pub fn check_frame(path_frame: Option<&str>, scenario_frame: Option<&str>) -> Vec<PathSafetyIssue> {
+    check_frame_required(path_frame, scenario_frame, false)
+}
+
+/// Like `check_frame`, and with `require_frame` a path that declares no frame is refused when the scenario declares one (the frame it was
+/// planned in is not known, so it cannot be taken as the scenario's own).
+pub fn check_frame_required(
+    path_frame: Option<&str>,
+    scenario_frame: Option<&str>,
+    require_frame: bool,
+) -> Vec<PathSafetyIssue> {
     match (path_frame, scenario_frame) {
         (Some(path), Some(scenario)) if path == scenario => Vec::new(),
         (Some(_), _) => vec![PathSafetyIssue::PathFrameDoesNotMatch],
+        (None, Some(_)) if require_frame => vec![PathSafetyIssue::PathFrameDoesNotMatch],
         (None, _) => Vec::new(),
     }
 }
@@ -346,6 +358,23 @@ mod tests {
 
         let unsafe_path = vec![Vec3::new(0.0, 0.0, 0.0), Vec3::new(999.0, 0.0, 0.0)];
         assert!(!is_path_safe(&unsafe_path, &obstacles, &workspace, 0.1));
+    }
+
+    #[test]
+    fn a_path_without_a_frame_is_refused_when_the_frame_is_required() {
+        // off: the bare array is accepted as before
+        assert!(check_frame_required(None, Some("cell"), false).is_empty());
+        // on: only when the scenario declares a frame
+        assert_eq!(
+            check_frame_required(None, Some("cell"), true),
+            vec![PathSafetyIssue::PathFrameDoesNotMatch]
+        );
+        assert!(check_frame_required(None, None, true).is_empty());
+        assert!(check_frame_required(Some("cell"), Some("cell"), true).is_empty());
+        assert_eq!(
+            check_frame_required(Some("world"), Some("cell"), true),
+            vec![PathSafetyIssue::PathFrameDoesNotMatch]
+        );
     }
 
     #[test]

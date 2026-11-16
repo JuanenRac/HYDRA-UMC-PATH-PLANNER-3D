@@ -11,7 +11,7 @@ way) — the output shown is real, not illustrative.
 
 ```
 $ ./run.sh <scenario.json>
-$ ./run.sh validate <scenario.json> <path.json>
+$ ./run.sh validate <scenario.json> <path.json> [--require-frame]
 $ ./run.sh shrink <scenario.json> [--out <minimal.json>]
 ```
 
@@ -30,7 +30,7 @@ $ hydra-umc-path-planner-3d
 HYDRA-UMC-PATH-PLANNER-3D v0.0.8
 Path planner: computes collision-free RRT paths for one agent through a static obstacle set.
 Usage: hydra-umc-path-planner-3d <scenario.json>
-       hydra-umc-path-planner-3d validate <scenario.json> <path.json>
+       hydra-umc-path-planner-3d validate <scenario.json> <path.json> [--require-frame]
        hydra-umc-path-planner-3d shrink <scenario.json> [--out <minimal.json>]
 See scenarios/example.json for the expected format.
 ```
@@ -160,7 +160,7 @@ Re-checks an **already-computed** path (cached, replayed, or relayed from
 another process) against a scenario's *current* obstacles and workspace,
 without running a new search — a fail-safe gate before a robot actually
 executes the path for real. `<path.json>` is a bare JSON array of
-`{"x":.., "y":.., "z":..}` waypoints.
+`{"x":.., "y":.., "z":..}` waypoints. A path without a `frame` is taken as being in the frame of the scenario and a line on standard error says so; with `--require-frame` it is refused (as a frame mismatch) when the scenario declares a frame. The option is off by default.
 
 **A real, safe path** — the actual path this project's own planner produced
 above for `scenarios/example.json`, re-validated against the same scenario:
@@ -210,7 +210,7 @@ Exits `1`.
 $ hydra-umc-path-planner-3d validate scenarios/example.json
 HYDRA-UMC-PATH-PLANNER-3D v0.0.8
 Path planner: computes collision-free RRT paths for one agent through a static obstacle set.
-Usage: hydra-umc-path-planner-3d validate <scenario.json> <path.json>
+Usage: hydra-umc-path-planner-3d validate <scenario.json> <path.json> [--require-frame]
 <path.json> is a bare JSON array of {"x":.., "y":.., "z":..} waypoints.
 ```
 
