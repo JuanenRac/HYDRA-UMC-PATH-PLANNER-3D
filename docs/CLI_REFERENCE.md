@@ -40,6 +40,15 @@ valid no-argument invocation, not a failure.
 
 ## Commands
 
+Scenario files (planar, arm and fleet) fail closed on a key the planner does not know: the error names it.
+
+### `validate-arm <arm-scenario.json> <path.json>`
+
+Checks a path of joint angles that was computed earlier or elsewhere against the arm scenario as it is now. `<path.json>` is a list of
+angle lists in radians, or an object with a `path` (the output of `arm`). It checks the number of joints, that the values are finite and
+inside the joint limits, that the path starts at `start` and ends at `goal`, and collisions at every waypoint and along every move. The
+answer is `{"status":"safe"}` (exit 0), `{"status":"unsafe","issues":[...]}` or `{"status":"error","reason":"..."}` (exit 1).
+
 ### `<scenario.json>`
 
 Runs the real RRT planner against a scenario (`start`, `goal`, `obstacles`,

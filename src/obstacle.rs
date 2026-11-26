@@ -15,6 +15,7 @@ use crate::geometry::Vec3;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Obstacle {
     pub center: Vec3,
     pub radius: f64,
@@ -60,6 +61,7 @@ impl Obstacle {
 /// sphere, so the box is inflated by the clearance on every side; the rounded corners the sphere would leave are counted as filled, which keeps
 /// the check on the safe side.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct BoxObstacle {
     pub min: Vec3,
     pub max: Vec3,
@@ -126,6 +128,7 @@ impl BoxObstacle {
 /// Euler angles in degrees, as the zones files of HYDRA-UMC-SAFETY-ZONES write them: the local axes are rotated by `R = Rz(yaw) * Ry(pitch) * Rx(roll)`.
 /// A missing angle is 0.
 #[derive(Debug, Clone, Copy, Default, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Rotation {
     #[serde(default)]
     pub roll: f64,
@@ -157,6 +160,7 @@ impl Rotation {
 /// `rotation` in degrees. Like the aligned box it is inflated by the clearance on every side, so the rounded corners the sphere would leave are counted
 /// as filled and the check stays on the safe side.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct ObbObstacle {
     pub center: Vec3,
     pub half_extents: Vec3,
@@ -203,6 +207,7 @@ impl ObbObstacle {
 
 /// A capsule (a link of a robot, a conveyor edge, a pole): every point within `radius` of the segment `start`-`end`. Equal ends make a sphere.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct CapsuleObstacle {
     pub start: Vec3,
     pub end: Vec3,
