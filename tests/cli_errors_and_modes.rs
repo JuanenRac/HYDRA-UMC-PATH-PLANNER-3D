@@ -625,3 +625,47 @@ fn the_arm_command_refuses_a_file_that_is_not_an_arm_scenario_and_reports_a_bloc
     assert_eq!(code, Some(1), "{stdout}");
     assert!(stdout.contains("no_path_found"), "{stdout}");
 }
+
+const ARM: &str = r#"{"arm":{"joints":[{"origin":{"x":0,"y":0,"z":0},"axis":{"x":0,"y":0,"z":1},"lower":-3,"upper":3}],
+  "tip":{"x":1,"y":0,"z":0}},"start":[0.0],"goal":[1.0]}"#;
+
+#[test]
+fn validate_arm_says_safe_unsafe_or_why_it_cannot_tell() {
+    let command = Path::new("validate-arm");
+    let scenario = temp("arm.json", ARM);
+    let good = temp("arm_path.json", r#"{"status":"ok","path":[[0.0],[1.0]]}"#);
+    let (code, stdout, _) = run(&[command, &scenario, &good]);
+    assert_eq!(code, Some(0), "{stdout}");
+    assert!(stdout.contains("\"safe\""), "{stdout}");
+
+    let short = temp("arm_short.json", "[[0.0],[0.5]]");
+    let (code, stdout, _) = run(&[command, &scenario, &short]);
+    assert_eq!(code, Some(1), "{stdout}");
+    assert!(stdout.contains("PathDoesNotReachGoal"), "{stdout}");
+
+    let broken = temp(
+        "arm_broken.json",
+        &ARM.replace("\"upper\":3", "\"upper\":-4"),
+    );
+    let (code, stdout, _) = run(&[command, &broken, &good]);
+    assert_eq!(code, Some(1), "{stdout}");
+    assert!(stdout.contains("invalid_input"), "{stdout}");
+
+    let junk = temp("arm_junk.json", "{not json");
+    for files in [[&junk, &good], [&scenario, &junk]] {
+        let (code, stdout, stderr) = run(&[command, files[0], files[1]]);
+        assert_eq!(code, Some(1), "{stdout}");
+        assert!(stderr.contains("could not parse"), "{stderr}");
+    }
+    let (code, _, stderr) = run(&[
+        command,
+        &scenario,
+        Path::new("definitely-missing-path.json"),
+    ]);
+    assert_eq!(code, Some(1));
+    assert!(stderr.contains("could not read"), "{stderr}");
+
+    let (code, _, stderr) = run(&[command, &scenario]);
+    assert_eq!(code, Some(1));
+    assert!(stderr.contains("Usage:"), "{stderr}");
+}
