@@ -645,7 +645,7 @@ fn validate_arm_says_safe_unsafe_or_why_it_cannot_tell() {
 
     let broken = temp(
         "arm_broken.json",
-        &ARM.replace("\"upper\":3", "\"upper\":-4"),
+        &ONE_JOINT_ARM.replace("\"upper\":3", "\"upper\":-4"),
     );
     let (code, stdout, _) = run(&[command, &broken, &good]);
     assert_eq!(code, Some(1), "{stdout}");
