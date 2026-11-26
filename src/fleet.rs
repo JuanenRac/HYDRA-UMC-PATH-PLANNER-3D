@@ -34,6 +34,7 @@ fn default_wait_step() -> f64 {
 /// its start, in steps of `wait_step` seconds, for at most `max_wait` seconds. A value that is not positive and finite (not negative for
 /// `max_wait`) is taken as its default.
 #[derive(Debug, Clone, Copy, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Timing {
     #[serde(default = "default_speed")]
     pub speed: f64,
@@ -44,6 +45,7 @@ pub struct Timing {
 }
 
 #[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct FleetRobot {
     pub id: String,
     pub start: Vec3,
@@ -62,6 +64,7 @@ pub struct FleetRobot {
 
 /// The robots in the order of their priority (the first one has it), the workspace they share and the fixed obstacles.
 #[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Fleet {
     pub robots: Vec<FleetRobot>,
     #[serde(default)]

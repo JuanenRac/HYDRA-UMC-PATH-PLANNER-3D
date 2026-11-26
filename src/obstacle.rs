@@ -15,6 +15,7 @@ use crate::geometry::Vec3;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Obstacle {
     pub center: Vec3,
     pub radius: f64,
@@ -60,6 +61,7 @@ impl Obstacle {
 /// sphere, so the box is inflated by the clearance on every side; the rounded corners the sphere would leave are counted as filled, which keeps
 /// the check on the safe side.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct BoxObstacle {
     pub min: Vec3,
     pub max: Vec3,
@@ -126,6 +128,7 @@ impl BoxObstacle {
 /// Euler angles in degrees, as the zones files of HYDRA-UMC-SAFETY-ZONES write them: the local axes are rotated by `R = Rz(yaw) * Ry(pitch) * Rx(roll)`.
 /// A missing angle is 0.
 #[derive(Debug, Clone, Copy, Default, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Rotation {
     #[serde(default)]
     pub roll: f64,
@@ -157,6 +160,7 @@ impl Rotation {
 /// `rotation` in degrees. Like the aligned box it is inflated by the clearance on every side, so the rounded corners the sphere would leave are counted
 /// as filled and the check stays on the safe side.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct ObbObstacle {
     pub center: Vec3,
     pub half_extents: Vec3,
@@ -203,6 +207,7 @@ impl ObbObstacle {
 
 /// A capsule (a link of a robot, a conveyor edge, a pole): every point within `radius` of the segment `start`-`end`. Equal ends make a sphere.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct CapsuleObstacle {
     pub start: Vec3,
     pub end: Vec3,
@@ -263,12 +268,44 @@ fn segment_distance(p1: Vec3, q1: Vec3, p2: Vec3, q2: Vec3) -> f64 {
 /// A solid obstacle other than a sphere, as a scenario lists it in `boxes`: an aligned box (`min`, `max`), an oriented box (`center`,
 /// `half_extents`, `rotation_deg`) or a capsule (`start`, `end`, `radius`). Each is told apart by its own fields, so a list written for the aligned
 /// boxes alone reads as before.
-#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Serialize)]
 #[serde(untagged)]
 pub enum Solid {
     Capsule(CapsuleObstacle),
     Obb(ObbObstacle),
     Aabb(BoxObstacle),
+}
+
+/// Reads a solid by its own fields. A `shape` key is the one extra key it may carry, and it has to name the solid the fields describe.
+impl<'de> Deserialize<'de> for Solid {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        use serde::de::Error;
+
+        #[derive(Deserialize)]
+        #[serde(untagged)]
+        enum Fields {
+            Capsule(CapsuleObstacle),
+            Obb(ObbObstacle),
+            Aabb(BoxObstacle),
+        }
+
+        let mut map = serde_json::Map::<String, serde_json::Value>::deserialize(deserializer)?;
+        let declared = map.remove("shape");
+        let fields = serde_json::from_value(serde_json::Value::Object(map)).map_err(|_| {
+            D::Error::custom("a solid needs min and max, center and half_extents (with an optional rotation_deg), or start, end and radius, and no other key")
+        })?;
+        let (solid, shape) = match fields {
+            Fields::Capsule(s) => (Solid::Capsule(s), "capsule"),
+            Fields::Obb(s) => (Solid::Obb(s), "obb"),
+            Fields::Aabb(s) => (Solid::Aabb(s), "aabb"),
+        };
+        match declared {
+            Some(name) if name.as_str() != Some(shape) => Err(D::Error::custom(format!(
+                "the shape {name} does not match the fields of the solid, which describe {shape}"
+            ))),
+            _ => Ok(solid),
+        }
+    }
 }
 
 impl Solid {
@@ -1018,8 +1055,12 @@ mod solid_tests {
         assert!(matches!(solids[0], Solid::Aabb(_)));
         assert!(
             matches!(solids[1], Solid::Aabb(_)),
-            "a stray shape key is ignored as before"
+            "a shape key that matches the fields is accepted"
         );
+        assert!(serde_json::from_str::<Vec<Solid>>(
+            r#"[{"shape":"capsule","min":{"x":0,"y":0,"z":0},"max":{"x":1,"y":1,"z":1}}]"#
+        )
+        .is_err());
         assert!(matches!(solids[2], Solid::Obb(b) if b.rotation_deg.yaw == 30.0));
         assert!(matches!(solids[3], Solid::Obb(b) if b.rotation_deg.yaw == 0.0));
         assert!(matches!(solids[4], Solid::Capsule(b) if b.radius == 0.2));

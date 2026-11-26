@@ -13,7 +13,7 @@
 use crate::geometry::Vec3;
 use crate::obstacle::{Obstacle, Solid};
 use crate::rng::Xorshift64Star;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 type Matrix = [[f64; 3]; 3];
 
@@ -70,6 +70,7 @@ fn from_rpy(rpy: Vec3) -> Matrix {
 }
 
 #[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct ArmJoint {
     /// only a label for the person who writes the scenario
     #[serde(default)]
@@ -86,6 +87,7 @@ pub struct ArmJoint {
 }
 
 #[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Arm {
     /// where the base of the arm is in the world (the origin when absent)
     #[serde(default)]
@@ -105,6 +107,7 @@ fn default_link_radius() -> f64 {
 /// How the search in joint space works; every number is in radians except the counts.
 #[derive(Debug, Clone, Copy, Deserialize)]
 #[serde(default)]
+#[serde(deny_unknown_fields)]
 pub struct ArmConfig {
     /// the longest step of the tree towards a sample
     pub step_rad: f64,
@@ -136,6 +139,7 @@ impl Default for ArmConfig {
 pub const MAX_ITERATIONS_LIMIT: u32 = 100_000;
 
 #[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct ArmScenario {
     pub arm: Arm,
     pub start: Vec<f64>,
@@ -373,6 +377,126 @@ pub fn plan_arm(scenario: &ArmScenario) -> Result<Vec<Vec<f64>>, ArmError> {
         }
     }
     Err(ArmError::NoPathFound)
+}
+
+/// What is wrong with a path of joint angles; `index` counts the waypoints from 0.
+#[derive(Debug, PartialEq, Serialize)]
+pub enum ArmPathIssue {
+    EmptyPath,
+    WrongJointCount {
+        index: usize,
+        found: usize,
+    },
+    NonFiniteAngle {
+        index: usize,
+        joint: usize,
+    },
+    OutsideJointLimits {
+        index: usize,
+        joint: usize,
+    },
+    PathDoesNotStartAtStart,
+    PathDoesNotReachGoal,
+    WaypointInCollision {
+        index: usize,
+    },
+    SegmentInCollision {
+        from_index: usize,
+        to_index: usize,
+    },
+    /// the move needs more checks than the validator makes, so it is not called safe
+    SegmentTooLongToCheck {
+        from_index: usize,
+        to_index: usize,
+    },
+}
+
+/// How near two angles are to be the same one, in radians.
+const SAME_ANGLE_RAD: f64 = 1e-6;
+
+/// Checks a path of joint angles that may come from anywhere (a file, another process, an older plan) against the scenario as it is now. It
+/// shares the forward kinematics and the collision primitives with the planner and nothing else: it does not use the search or its check of a
+/// move, it bounds the travel of a point of the arm with the full reach of the chain for every joint, and it samples at half the steps the
+/// scenario asks for. A move it cannot cover with `MAX_STEPS_PER_MOVE` checks is reported, never passed.
+pub fn validate_arm_path(
+    scenario: &ArmScenario,
+    path: &[Vec<f64>],
+) -> Result<Vec<ArmPathIssue>, ArmError> {
+    validate(scenario)?;
+    let arm = &scenario.arm;
+    if path.is_empty() {
+        return Ok(vec![ArmPathIssue::EmptyPath]);
+    }
+    let mut issues = Vec::new();
+    let mut usable = vec![true; path.len()];
+    for (index, q) in path.iter().enumerate() {
+        if q.len() != arm.joints.len() {
+            issues.push(ArmPathIssue::WrongJointCount {
+                index,
+                found: q.len(),
+            });
+            usable[index] = false;
+            continue;
+        }
+        for (joint, (angle, limits)) in q.iter().zip(&arm.joints).enumerate() {
+            if !angle.is_finite() {
+                issues.push(ArmPathIssue::NonFiniteAngle { index, joint });
+                usable[index] = false;
+            } else if *angle < limits.lower - SAME_ANGLE_RAD
+                || *angle > limits.upper + SAME_ANGLE_RAD
+            {
+                issues.push(ArmPathIssue::OutsideJointLimits { index, joint });
+            }
+        }
+        if usable[index] && in_collision(arm, q, &scenario.obstacles, &scenario.boxes) {
+            issues.push(ArmPathIssue::WaypointInCollision { index });
+        }
+    }
+    let same = |a: &[f64], b: &[f64]| {
+        a.len() == b.len()
+            && a.iter()
+                .zip(b)
+                .all(|(x, y)| (x - y).abs() <= SAME_ANGLE_RAD)
+    };
+    if !same(&path[0], &scenario.start) {
+        issues.push(ArmPathIssue::PathDoesNotStartAtStart);
+    }
+    if !same(&path[path.len() - 1], &scenario.goal) {
+        issues.push(ArmPathIssue::PathDoesNotReachGoal);
+    }
+    let reach = arm.tip.length() + arm.joints.iter().map(|j| j.origin.length()).sum::<f64>();
+    for from_index in 0..path.len() - 1 {
+        let to_index = from_index + 1;
+        if !(usable[from_index] && usable[to_index]) {
+            continue;
+        }
+        let (a, b) = (&path[from_index], &path[to_index]);
+        let changes: Vec<f64> = a.iter().zip(b).map(|(x, y)| (y - x).abs()).collect();
+        let by_angle =
+            changes.iter().copied().fold(0.0, f64::max) / (scenario.config.resolution_rad * 0.5);
+        let by_travel = changes.iter().sum::<f64>() * reach / (scenario.config.sweep_m * 0.5);
+        let needed = by_angle.max(by_travel).ceil();
+        if !needed.is_finite() || needed > MAX_STEPS_PER_MOVE {
+            issues.push(ArmPathIssue::SegmentTooLongToCheck {
+                from_index,
+                to_index,
+            });
+            continue;
+        }
+        let steps = needed.max(1.0) as usize;
+        let hit = (1..steps).any(|i| {
+            let t = i as f64 / steps as f64;
+            let q: Vec<f64> = a.iter().zip(b).map(|(x, y)| x + (y - x) * t).collect();
+            in_collision(arm, &q, &scenario.obstacles, &scenario.boxes)
+        });
+        if hit {
+            issues.push(ArmPathIssue::SegmentInCollision {
+                from_index,
+                to_index,
+            });
+        }
+    }
+    Ok(issues)
 }
 
 #[cfg(test)]
@@ -706,5 +830,68 @@ mod tests {
             seed: None,
         };
         assert_eq!(plan_arm(&s), Err(ArmError::NoPathFound));
+    }
+
+    fn turning(obstacles: Vec<Obstacle>) -> ArmScenario {
+        ArmScenario {
+            arm: planar_arm(),
+            start: vec![0.0, 0.0],
+            goal: vec![1.5, 0.0],
+            obstacles,
+            boxes: Vec::new(),
+            config: ArmConfig::default(),
+            seed: Some(1),
+        }
+    }
+
+    #[test]
+    fn a_path_of_joint_angles_is_checked_without_the_planner() {
+        let free = turning(Vec::new());
+        let straight = vec![vec![0.0, 0.0], vec![1.5, 0.0]];
+        assert_eq!(validate_arm_path(&free, &straight), Ok(Vec::new()));
+        // a small ball in the middle of the sweep: both ends are clear, the move between them is not
+        let ball = turning(vec![Obstacle {
+            center: Vec3::new(1.5 * 0.75_f64.cos(), 1.5 * 0.75_f64.sin(), 0.0),
+            radius: 0.05,
+        }]);
+        assert_eq!(
+            validate_arm_path(&ball, &straight),
+            Ok(vec![ArmPathIssue::SegmentInCollision {
+                from_index: 0,
+                to_index: 1
+            }])
+        );
+    }
+
+    #[test]
+    fn a_path_that_is_not_the_one_of_the_scenario_is_named_issue_by_issue() {
+        let free = turning(Vec::new());
+        assert_eq!(
+            validate_arm_path(&free, &[]),
+            Ok(vec![ArmPathIssue::EmptyPath])
+        );
+        let bad = vec![
+            vec![0.1, 0.0],
+            vec![0.2],
+            vec![4.0, 0.0],
+            vec![1.5, f64::NAN],
+        ];
+        let issues = validate_arm_path(&free, &bad).unwrap();
+        for expected in [
+            ArmPathIssue::PathDoesNotStartAtStart,
+            ArmPathIssue::WrongJointCount { index: 1, found: 1 },
+            ArmPathIssue::OutsideJointLimits { index: 2, joint: 0 },
+            ArmPathIssue::NonFiniteAngle { index: 3, joint: 1 },
+            ArmPathIssue::PathDoesNotReachGoal,
+        ] {
+            assert!(issues.contains(&expected), "{expected:?} in {issues:?}");
+        }
+    }
+
+    #[test]
+    fn an_unknown_key_of_an_arm_scenario_is_refused() {
+        let raw = r#"{"arm":{"joints":[],"tip":{"x":1,"y":0,"z":0}},"start":[],"goal":[],"zones_file":"cell.json"}"#;
+        let error = serde_json::from_str::<ArmScenario>(raw).unwrap_err();
+        assert!(error.to_string().contains("zones_file"), "{error}");
     }
 }

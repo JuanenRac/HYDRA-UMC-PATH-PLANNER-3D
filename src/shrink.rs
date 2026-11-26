@@ -41,6 +41,7 @@ use serde::{Deserialize, Serialize};
 /// replayable by the plain CLI invocation (`hydra-umc-path-planner-3d
 /// minimal-failure.json`) - a human never has to hand-translate it.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Scenario {
     pub start: Vec3,
     pub goal: Vec3,

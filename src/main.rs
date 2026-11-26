@@ -48,6 +48,7 @@ use validate::{check_endpoints, check_frame_required, validate_path_with_boxes, 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 #[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
 struct Scenario {
     start: Vec3,
     goal: Vec3,
@@ -467,6 +468,52 @@ fn run_arm(arm_path: &str) -> ExitCode {
     }
 }
 
+/// A file with a path of joint angles: the bare list, or an object with a `path` (the output of `arm` is one; its other fields are ignored).
+#[derive(Deserialize)]
+#[serde(untagged)]
+enum ArmPathFile {
+    Bare(Vec<Vec<f64>>),
+    Wrapped { path: Vec<Vec<f64>> },
+}
+
+/// Checks an already computed path of joint angles against an arm scenario (see `arm::validate_arm_path`).
+fn run_validate_arm(arm_path: &str, path_path: &str) -> ExitCode {
+    let read =
+        |file: &str| fs::read_to_string(file).map_err(|e| format!("could not read {file}: {e}"));
+    let loaded = read(arm_path).and_then(|raw| {
+        serde_json::from_str::<arm::ArmScenario>(&raw)
+            .map_err(|e| format!("could not parse {arm_path}: {e}"))
+    });
+    let waypoints = read(path_path).and_then(|raw| match serde_json::from_str(&raw) {
+        Ok(ArmPathFile::Bare(path)) | Ok(ArmPathFile::Wrapped { path }) => Ok(path),
+        Err(e) => Err(format!("could not parse {path_path}: {e}")),
+    });
+    let (scenario, path) = match (loaded, waypoints) {
+        (Ok(scenario), Ok(path)) => (scenario, path),
+        (Err(reason), _) | (_, Err(reason)) => {
+            eprintln!("[path-planner-3d] {reason}");
+            return ExitCode::FAILURE;
+        }
+    };
+    let (outcome, safe) = match arm::validate_arm_path(&scenario, &path) {
+        Ok(issues) if issues.is_empty() => (serde_json::json!({"status": "safe"}), true),
+        Ok(issues) => (
+            serde_json::json!({"status": "unsafe", "issues": issues}),
+            false,
+        ),
+        Err(e) => (
+            serde_json::json!({"status": "error", "reason": e.reason()}),
+            false,
+        ),
+    };
+    println!("{outcome:#}");
+    if safe {
+        ExitCode::SUCCESS
+    } else {
+        ExitCode::FAILURE
+    }
+}
+
 fn run_shrink(scenario_path: &str, out_path: Option<&str>) -> ExitCode {
     let raw = match fs::read_to_string(scenario_path) {
         Ok(raw) => raw,
@@ -603,6 +650,17 @@ fn main() -> ExitCode {
         return run_shrink(scenario_path, out_path);
     }
 
+    if args.get(1).map(String::as_str) == Some("validate-arm") {
+        let (Some(arm_path), Some(path_path), None) = (args.get(2), args.get(3), args.get(4))
+        else {
+            eprintln!(
+                "Usage: hydra-umc-path-planner-3d validate-arm <arm-scenario.json> <path.json>"
+            );
+            return ExitCode::FAILURE;
+        };
+        return run_validate_arm(arm_path, path_path);
+    }
+
     if args.get(1).map(String::as_str) == Some("arm") {
         let Some(arm_path) = args.get(2) else {
             eprintln!("Usage: hydra-umc-path-planner-3d arm <arm-scenario.json>");
@@ -616,6 +674,7 @@ fn main() -> ExitCode {
         eprintln!("Usage: hydra-umc-path-planner-3d <scenario.json>   (\"-\" reads the scenario from standard input; add --exit-codes for 1 no path, 2 invalid input, 3 time limit)");
         eprintln!("       hydra-umc-path-planner-3d validate <scenario.json> <path.json> [--require-frame]");
         eprintln!("       hydra-umc-path-planner-3d shrink <scenario.json> [--out <minimal.json>]");
+        eprintln!("       hydra-umc-path-planner-3d validate-arm <arm-scenario.json> <path.json>");
         eprintln!("       hydra-umc-path-planner-3d serve [--addr HOST:PORT] [--token TOKEN] [--allow-anonymous] [--config FILE]   (off unless asked for; GET /health, and GET /metrics only when the configuration opens it)");
         eprintln!("See scenarios/example.json for the expected format.");
         return ExitCode::SUCCESS; // printing identity and usage is a valid no-arg invocation, not a failure
@@ -818,6 +877,28 @@ mod frame_tests {
         })
         .unwrap();
         assert!(without.get("frame").is_none());
+    }
+
+    #[test]
+    fn a_misspelt_or_unsupported_key_of_a_scenario_is_refused_by_name() {
+        let base = r#""start":{"x":0,"y":0,"z":0},"goal":{"x":1,"y":0,"z":0},
+            "workspace":{"min":{"x":-2,"y":-2,"z":-2},"max":{"x":2,"y":2,"z":2}}"#;
+        for (extra, name) in [
+            (r#""obstacle":[]"#, "obstacle"),
+            (r#""config":{"robot_radious":0.2}"#, "robot_radious"),
+            (
+                r#""obstacles":[{"center":{"x":0,"y":0,"z":0},"radius":1,"margin":2}]"#,
+                "margin",
+            ),
+        ] {
+            let raw = format!("{{{base},{extra}}}");
+            let error = serde_json::from_str::<Scenario>(&raw).err().expect(name);
+            assert!(error.to_string().contains(name), "{error}");
+        }
+        let solid = format!(
+            r#"{{{base},"boxes":[{{"min":{{"x":0,"y":0,"z":0}},"max":{{"x":1,"y":1,"z":1}},"inflate":1}}]}}"#
+        );
+        assert!(serde_json::from_str::<Scenario>(&solid).is_err());
     }
 
     #[test]

@@ -24,6 +24,7 @@ use serde::{Deserialize, Serialize};
 use std::time::{Duration, Instant};
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Workspace {
     pub min: Vec3,
     pub max: Vec3,
@@ -55,6 +56,7 @@ impl Workspace {
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 #[serde(default)]
+#[serde(deny_unknown_fields)]
 pub struct PlannerConfig {
     pub max_iterations: u32,
     pub step_size: f64,
