@@ -56,6 +56,10 @@ Runs the real RRT planner against a scenario (`start`, `goal`, `obstacles`,
 `{"status":"ok","path":[...]}` on success, or
 `{"status":"error","reason":"..."}` if the planner can't produce a path.
 
+With `"output_meta": true` in the scenario (default `false`) a successful answer also carries `meta`: `seed`, `iterations`, `tree_nodes`,
+`stopped_by` (`goal`, `iterations` or `deadline`), `robot_radius`, `planner_version`, and `deterministic: false` when the clock cut the
+optimizer, so the same scenario and seed may answer another path.
+
 The `config` object takes `max_iterations`, `step_size`, `goal_bias`, `goal_threshold`, `robot_radius` and `max_duration_ms`
 (each one left out takes its default), and two keys that switch on RRT*: `optimize_iterations` (default `0`, the plain RRT that
 stops at the first path) and `rewire_radius` (default `1.0`). With `optimize_iterations` above `0` every new node takes the
@@ -278,7 +282,7 @@ A small HTTP listener. Unless the configuration opens `POST /plan` (see below) i
 
 * **`metrics`:** `GET /metrics` in the text format of Prometheus, off unless `enabled` is `true` (closed, the route answers `404` like any unknown path, even with the token); read at start. Open, it answers a caller on this machine, or any caller that presents the bearer token when the service has one (`401` otherwise). It publishes numbers only (version, uptime, responses by class of status and health); no label carries a path, an address or a scenario.
 
-* **`plan`:** `POST /plan` plans the scenario in the body (the same JSON as the command line) and answers the same JSON. Off unless `enabled` is `true`: closed, the route answers `404` like any unknown path. Open, it needs the bearer token when one is set; without a token only a caller on this machine is answered, and `serve` refuses to start with the route open on an address other than the loopback unless a token is set (`--allow-anonymous` is not enough). `max_body_bytes` (1024 to 16777216, default 1048576) caps the body (`413` above it) and `max_duration_ms` (100 to 600000, default 10000) caps the search whatever the scenario asks for (`504` when it is hit). A scenario that cannot be read or is not valid is `400`; no path, or a start or goal that cannot be used, is `422`; a scenario cannot name a `zones_file` in a request (send the boxes). The last 32 answers are kept by the text of the scenario, which includes the seed, so a repeated request gets the same answer without a new search. The service answers one request at a time, so a long search holds the others up to the limit.
+* **`plan`:** `POST /plan` plans the scenario in the body (the same JSON as the command line) and answers the same JSON. Off unless `enabled` is `true`: closed, the route answers `404` like any unknown path. Open, it needs the bearer token when one is set; without a token only a caller on this machine is answered, and `serve` refuses to start with the route open on an address other than the loopback unless a token is set (`--allow-anonymous` is not enough). `max_body_bytes` (1024 to 16777216, default 1048576) caps the body (`413` above it) and `max_duration_ms` (100 to 600000, default 10000) caps the search whatever the scenario asks for (`504` when it is hit). With `"meta": true` (default `false`) every successful answer carries `meta`; an answer the clock cut is not kept for a repeated request. A scenario that cannot be read or is not valid is `400`; no path, or a start or goal that cannot be used, is `422`; a scenario cannot name a `zones_file` in a request (send the boxes). The last 32 answers are kept by the text of the scenario, which includes the seed, so a repeated request gets the same answer without a new search. The service answers one request at a time, so a long search holds the others up to the limit.
 
 ## Not yet wired in
 
