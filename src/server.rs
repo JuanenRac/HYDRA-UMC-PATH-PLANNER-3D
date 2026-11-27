@@ -38,7 +38,11 @@ pub struct PlanSettings {
     pub max_body_bytes: usize,
     /// the longest a search may run, in milliseconds; a scenario cannot ask for more
     pub max_duration_ms: u64,
+    /// every successful answer carries `meta` (a scenario can also ask for it with `output_meta`)
+    pub meta: bool,
 }
+
+const PLAN_FIELDS: [&str; 4] = ["enabled", "max_body_bytes", "max_duration_ms", "meta"];
 
 impl Default for PlanSettings {
     fn default() -> Self {
@@ -46,6 +50,7 @@ impl Default for PlanSettings {
             enabled: false,
             max_body_bytes: 1_048_576,
             max_duration_ms: 10_000,
+            meta: false,
         }
     }
 }
@@ -87,14 +92,14 @@ pub fn parse_config(text: &str) -> Result<(bool, PlanSettings), String> {
     let mut plan = PlanSettings::default();
     if let Some(section) = object.get("plan") {
         let section = section.as_object().ok_or("plan must be an object")?;
-        if let Some(k) = section
-            .keys()
-            .find(|k| !["enabled", "max_body_bytes", "max_duration_ms"].contains(&k.as_str()))
-        {
+        if let Some(k) = section.keys().find(|k| !PLAN_FIELDS.contains(&k.as_str())) {
             return Err(format!("the plan configuration has an unknown field: {k}"));
         }
         if let Some(v) = section.get("enabled") {
             plan.enabled = v.as_bool().ok_or("plan.enabled must be true or false")?;
+        }
+        if let Some(v) = section.get("meta") {
+            plan.meta = v.as_bool().ok_or("plan.meta must be true or false")?;
         }
         if let Some(v) = section.get("max_body_bytes") {
             let n = v
@@ -210,8 +215,8 @@ fn cached(body: &str) -> Option<(u16, String)> {
         .map(|(_, status, answer)| (*status, answer.clone()))
 }
 
-fn remember(body: &str, status: u16, answer: &str) {
-    if status == 504 {
+fn remember(body: &str, status: u16, answer: &str, repeatable: bool) {
+    if !repeatable {
         return;
     }
     if let Ok(mut cache) = CACHE.lock() {
@@ -257,9 +262,10 @@ fn handle_plan(mut request: Request, token: &Option<String>, plan: &PlanSettings
     let (status, answer) = match cached(&body) {
         Some(hit) => hit,
         None => {
-            let fresh = crate::plan_scenario_text(&body, plan.max_duration_ms);
-            remember(&body, fresh.0, &fresh.1);
-            fresh
+            let (status, answer, repeatable) =
+                crate::plan_scenario_text(&body, plan.max_duration_ms, plan.meta);
+            remember(&body, status, &answer, repeatable);
+            (status, answer)
         }
     };
     METRICS.count(status);

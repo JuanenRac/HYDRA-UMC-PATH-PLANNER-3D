@@ -101,3 +101,43 @@ fn a_scenario_can_ask_for_rrt_star_and_a_bad_radius_is_refused() {
     assert_ne!(code, Some(0), "{stdout}");
     assert!(stdout.contains("NonPositiveRewireRadius"), "{stdout}");
 }
+
+#[test]
+fn the_same_seed_gives_the_same_meta_and_a_cut_optimizer_says_it_is_not_deterministic() {
+    let folder = std::env::temp_dir().join(format!("pp3d-meta-{}", std::process::id()));
+    std::fs::create_dir_all(&folder).unwrap();
+    let write = |name: &str, extra: &str| {
+        let path = folder.join(name);
+        let scenario = format!(
+            r#"{{"start":{{"x":0,"y":0,"z":0}},"goal":{{"x":3,"y":0,"z":0}},"workspace":{{"min":{{"x":-5,"y":-5,"z":-5}},"max":{{"x":5,"y":5,"z":5}}}},"seed":7{extra}}}"#
+        );
+        std::fs::write(&path, scenario).unwrap();
+        path
+    };
+    let asked = write("asked.json", r#","output_meta":true"#);
+    let (code, first, _) = run(&[&asked]);
+    assert_eq!(code, Some(0));
+    assert_eq!(run(&[&asked]).1, first);
+    let answer: serde_json::Value = serde_json::from_str(&first).unwrap();
+    assert_eq!(answer["meta"]["seed"], 7);
+    assert_eq!(answer["meta"]["stopped_by"], "goal");
+    assert!(answer["meta"]["iterations"].as_u64().unwrap() >= 1);
+    assert!(answer["meta"].get("deterministic").is_none());
+
+    // not asked for: the answer is as before
+    let quiet = write("quiet.json", "");
+    let answer: serde_json::Value = serde_json::from_str(&run(&[&quiet]).1).unwrap();
+    assert!(answer.get("meta").is_none());
+
+    // an optimizer with far more work than its time: the clock ends it after the first path
+    let cut = write(
+        "cut.json",
+        r#","output_meta":true,"config":{"max_iterations":5000,"step_size":0.5,"goal_bias":0.5,"goal_threshold":0.5,"robot_radius":0.1,"max_duration_ms":200,"optimize_iterations":1000000,"rewire_radius":1.0}"#,
+    );
+    let (code, text, _) = run(&[&cut]);
+    assert_eq!(code, Some(0), "{text}");
+    let answer: serde_json::Value = serde_json::from_str(&text).unwrap();
+    assert_eq!(answer["meta"]["stopped_by"], "deadline");
+    assert_eq!(answer["meta"]["deterministic"], false);
+    let _ = std::fs::remove_dir_all(&folder);
+}

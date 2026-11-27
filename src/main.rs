@@ -37,7 +37,7 @@ mod corpus;
 
 use geometry::Vec3;
 use obstacle::{Obstacle, Solid};
-use rrt::{plan_with_boxes, PlanError, PlannerConfig, Workspace};
+use rrt::{plan_counted, PlanError, PlannerConfig, SearchStats, Workspace};
 use serde::{Deserialize, Serialize};
 use shrink::{planner_output_is_unsafe, shrink_scenario};
 use std::env;
@@ -70,6 +70,38 @@ struct Scenario {
     /// Decimals of the coordinates in the result (0 to 12). Absent: the coordinates are written as computed. The unit of every coordinate is the metre.
     #[serde(default)]
     output_decimals: Option<u8>,
+    /// Adds `meta` to a successful answer: the seed, the iterations, why the search stopped. Off by default.
+    #[serde(default)]
+    output_meta: bool,
+}
+
+/// With what a path was obtained and why the search stopped.
+#[derive(Serialize)]
+struct PlanMeta {
+    seed: u64,
+    iterations: u32,
+    tree_nodes: usize,
+    /// "goal", "iterations" or "deadline"
+    stopped_by: &'static str,
+    robot_radius: f64,
+    planner_version: &'static str,
+    /// Only when the clock cut the search: the same scenario and seed may give another path.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    deterministic: Option<bool>,
+}
+
+impl PlanMeta {
+    fn new(stats: SearchStats, seed: u64, robot_radius: f64) -> Self {
+        PlanMeta {
+            seed,
+            iterations: stats.iterations,
+            tree_nodes: stats.tree_nodes,
+            stopped_by: stats.stopped_by,
+            robot_radius,
+            planner_version: VERSION,
+            deterministic: (stats.stopped_by == "deadline").then_some(false),
+        }
+    }
 }
 
 /// The highest number of decimals `output_decimals` accepts.
@@ -127,6 +159,8 @@ enum PlanOutcome {
         path: Vec<Vec3>,
         #[serde(skip_serializing_if = "Option::is_none")]
         frame: Option<String>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        meta: Option<PlanMeta>,
     },
     #[serde(rename = "error")]
     Error { reason: String },
@@ -361,12 +395,15 @@ fn run_fleet(fleet_path: &str) -> ExitCode {
 
 /// The plan for a scenario given as text, for `POST /plan`: the HTTP status and the JSON body. The search is capped at `max_duration_ms`
 /// whatever the scenario asks for; a scenario cannot name a zones file (a request must not make the service read a path of its own).
-fn plan_scenario_text(text: &str, max_duration_ms: u64) -> (u16, String) {
-    let fail = |status: u16, reason: String| -> (u16, String) {
+///
+/// The last value is whether the answer may be kept and given again: one that depends on the clock may not.
+fn plan_scenario_text(text: &str, max_duration_ms: u64, always_meta: bool) -> (u16, String, bool) {
+    let fail = |status: u16, reason: String| -> (u16, String, bool) {
         let outcome = PlanOutcome::Error { reason };
         (
             status,
             serde_json::to_string(&outcome).unwrap_or_else(|_| "{}".to_string()),
+            status != 504,
         )
     };
     let scenario: Scenario = match serde_json::from_str(text) {
@@ -403,23 +440,28 @@ fn plan_scenario_text(text: &str, max_duration_ms: u64) -> (u16, String) {
             .max_duration_ms
             .map_or(max_duration_ms, |asked| asked.min(max_duration_ms)),
     );
-    match plan_with_boxes(
+    let seed = scenario.seed.unwrap_or(1);
+    let robot_radius = config.robot_radius;
+    match plan_counted(
         scenario.start,
         scenario.goal,
         &scenario.obstacles,
         &scenario.boxes,
         scenario.workspace,
         config,
-        scenario.seed.unwrap_or(1),
+        seed,
     ) {
-        Ok(path) => {
+        Ok((path, stats)) => {
             let outcome = PlanOutcome::Ok {
                 path: round_path(path, scenario.output_decimals),
                 frame,
+                meta: (always_meta || scenario.output_meta)
+                    .then(|| PlanMeta::new(stats, seed, robot_radius)),
             };
             (
                 200,
                 serde_json::to_string(&outcome).unwrap_or_else(|_| "{}".to_string()),
+                stats.stopped_by != "deadline",
             )
         }
         Err(e) => {
@@ -747,7 +789,9 @@ fn main() -> ExitCode {
         }
     };
 
-    let outcome = match plan_with_boxes(
+    let robot_radius = config.robot_radius;
+    let output_meta = scenario.output_meta;
+    let outcome = match plan_counted(
         scenario.start,
         scenario.goal,
         &scenario.obstacles,
@@ -756,9 +800,10 @@ fn main() -> ExitCode {
         config,
         seed,
     ) {
-        Ok(path) => PlanOutcome::Ok {
+        Ok((path, stats)) => PlanOutcome::Ok {
             path: round_path(path, output_decimals),
             frame,
+            meta: output_meta.then(|| PlanMeta::new(stats, seed, robot_radius)),
         },
         Err(e) => PlanOutcome::Error {
             reason: plan_error_reason(e),
@@ -868,12 +913,14 @@ mod frame_tests {
         let with = serde_json::to_value(PlanOutcome::Ok {
             path: vec![],
             frame: Some("world".into()),
+            meta: None,
         })
         .unwrap();
         assert_eq!(with["frame"], "world");
         let without = serde_json::to_value(PlanOutcome::Ok {
             path: vec![],
             frame: None,
+            meta: None,
         })
         .unwrap();
         assert!(without.get("frame").is_none());

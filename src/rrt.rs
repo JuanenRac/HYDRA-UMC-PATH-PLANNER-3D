@@ -135,6 +135,16 @@ pub enum PlanError {
     InvalidInput(crate::semantics::InvalidScenarioReason),
 }
 
+/// What a search did to reach its path, so it can be reproduced and audited.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SearchStats {
+    pub iterations: u32,
+    pub tree_nodes: usize,
+    /// `goal` (the plain search stops there), `iterations` (the optimizer used its budget) or `deadline` (the clock cut the optimizer,
+    /// so another run of the same scenario and seed may answer another path).
+    pub stopped_by: &'static str,
+}
+
 struct TreeNode {
     point: Vec3,
     parent: Option<usize>,
@@ -165,6 +175,19 @@ pub fn plan_with_boxes(
     config: PlannerConfig,
     seed: u64,
 ) -> Result<Vec<Vec3>, PlanError> {
+    plan_counted(start, goal, obstacles, boxes, workspace, config, seed).map(|(path, _)| path)
+}
+
+/// `plan_with_boxes`, saying also how the path was reached.
+pub fn plan_counted(
+    start: Vec3,
+    goal: Vec3,
+    obstacles: &[Obstacle],
+    boxes: &[Solid],
+    workspace: Workspace,
+    config: PlannerConfig,
+    seed: u64,
+) -> Result<(Vec<Vec3>, SearchStats), PlanError> {
     // reject a semantically invalid scenario before any real
     // geometry check runs against it - see semantics.rs's own module
     // doc for why a negative robot_radius/obstacle radius or an
@@ -206,7 +229,12 @@ pub fn plan_with_boxes(
 
     if start == goal {
         // already there: the path is the one waypoint
-        return Ok(vec![start]);
+        let stats = SearchStats {
+            iterations: 0,
+            tree_nodes: 1,
+            stopped_by: "goal",
+        };
+        return Ok((vec![start], stats));
     }
 
     // one hierarchy for the whole search: every extension asks "is this segment clear?"
@@ -230,7 +258,7 @@ pub fn plan_with_boxes(
     let deadline = config.max_duration_ms.map(Duration::from_millis);
     let search_started = Instant::now();
 
-    for _ in 0..config.max_iterations {
+    for iteration in 1..=config.max_iterations {
         if let Some(deadline) = deadline {
             if search_started.elapsed() >= deadline {
                 return Err(PlanError::TimeLimitExceeded);
@@ -269,14 +297,18 @@ pub fn plan_with_boxes(
             // when the new node already is the goal (a goal-biased sample
             // close enough to land on it) it is the end of the path: adding
             // the goal again would end the path with a segment of length 0
-            if new_point == goal {
-                return Ok(reconstruct_path(&tree, new_idx));
+            if new_point != goal {
+                tree.push(TreeNode {
+                    point: goal,
+                    parent: Some(new_idx),
+                });
             }
-            tree.push(TreeNode {
-                point: goal,
-                parent: Some(new_idx),
-            });
-            return Ok(reconstruct_path(&tree, tree.len() - 1));
+            let stats = SearchStats {
+                iterations: iteration,
+                tree_nodes: tree.len(),
+                stopped_by: "goal",
+            };
+            return Ok((reconstruct_path(&tree, tree.len() - 1), stats));
         }
     }
 
@@ -298,7 +330,7 @@ fn plan_optimizing(
     workspace: Workspace,
     config: PlannerConfig,
     seed: u64,
-) -> Result<Vec<Vec3>, PlanError> {
+) -> Result<(Vec<Vec3>, SearchStats), PlanError> {
     let mut rng = Xorshift64Star::new(seed);
     let mut tree = vec![TreeNode {
         point: start,
@@ -317,6 +349,7 @@ fn plan_optimizing(
     let mut found = false;
     let mut iterations: u32 = 0;
     let mut extra: u32 = 0;
+    let mut stopped_by = "iterations";
 
     loop {
         if found {
@@ -333,6 +366,7 @@ fn plan_optimizing(
         if let Some(deadline) = deadline {
             if search_started.elapsed() >= deadline {
                 if found {
+                    stopped_by = "deadline";
                     break;
                 }
                 return Err(PlanError::TimeLimitExceeded);
@@ -432,7 +466,12 @@ fn plan_optimizing(
     if tree[end].point != goal {
         path.push(goal);
     }
-    Ok(path)
+    let stats = SearchStats {
+        iterations: iterations + extra,
+        tree_nodes: tree.len(),
+        stopped_by,
+    };
+    Ok((path, stats))
 }
 
 fn reconstruct_path(tree: &[TreeNode], mut idx: usize) -> Vec<Vec3> {
