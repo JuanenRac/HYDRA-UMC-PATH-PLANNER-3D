@@ -2,7 +2,7 @@
 
 All notable changes to this project are documented here.
 
-## [Unreleased]
+## [0.1.6] - Arm path checks, strict scenario keys and plan metadata
 
 - **A plan can say with what it was obtained and why the search stopped:** with `output_meta` in the scenario, or `plan.meta` in the configuration of `serve`, a successful answer carries `meta` (`seed`, `iterations`, `tree_nodes`, `stopped_by` `goal`/`iterations`/`deadline`, `robot_radius`, `planner_version`, and `deterministic: false` when the clock cut the optimizer). Off by default. `POST /plan` no longer keeps an answer that the time limit cut, so a repeated request searches again.
 - **A scenario with a key the planner does not know is refused:** a misspelt or unsupported key (`obstacle`, `robot_radious`, a `zones_file` in an arm scenario) was ignored without a word and the plan came out as free. Scenario, arm and fleet files, their obstacles and their `config` now fail closed and name the key. Path files and zones files are read as before.
